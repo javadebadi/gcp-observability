@@ -5,21 +5,17 @@ A service "has traces" if its application logs (stdout/stderr from the container
 carry a trace field matching the platform request log. This is set by OTEL or any
 structured logging library that propagates W3C trace context.
 
-A service "is dark" if:
-  - It emits no application logs at all, OR
-  - Its application logs have no trace field (logs exist but trace context is dropped)
-
-Output per service:
-  - sample_requests: how many platform request logs were sampled
-  - app_logs_with_trace: how many of those traces had correlated app logs
-  - app_logs_without_trace: app logs exist but no trace field
-  - no_app_logs: requests with zero app log correlation found
-  - verdict: OK | NO_TRACE | DARK
+Verdicts:
+  OK        — all sampled requests have correlated app logs with trace IDs
+  PARTIAL   — some requests have traces, some don't
+  NO_TRACE  — app logs exist but none carry a trace field
+  DARK      — no application logs found at all (service may not log to stdout)
+  NO_DATA   — no platform request logs found in the time window
 """
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 
-from google.cloud import logging_v2
+from google.cloud import logging as gcp_logging
 
 
 @dataclass
@@ -29,96 +25,88 @@ class ServiceTraceCoverage:
     region: str
     sample_requests: int
     app_logs_with_trace: int
-    no_app_logs: int          # platform request had no correlated app logs at all
-    app_logs_without_trace: int  # app logs found but trace field missing
-    verdict: str              # OK | NO_TRACE | DARK
-    example_missing_trace_ids: list[str]  # a few trace IDs for manual inspection
+    no_app_logs: int
+    app_logs_without_trace: int
+    verdict: str
+    example_missing_trace_ids: list[str] = field(default_factory=list)
+
+
+def _make_client(project: str) -> gcp_logging.Client:
+    return gcp_logging.Client(project=project)
+
+
+def _list_entries(
+    client: gcp_logging.Client,
+    project: str,
+    filter_: str,
+    max_results: int,
+) -> list:
+    try:
+        return list(client.list_entries(
+            resource_names=[f"projects/{project}"],
+            filter_=filter_,
+            order_by="timestamp desc",
+            max_results=max_results,
+        ))
+    except Exception as e:
+        print(f"  [warn] Log query failed: {e}")
+        return []
 
 
 def _request_logs(
-    client: logging_v2.Client,
+    client: gcp_logging.Client,
     project: str,
     service: str,
     hours_back: int,
     sample_size: int,
-) -> list[tuple[str, str]]:
-    """
-    Return up to sample_size (trace_id, log_name) pairs from platform request logs.
-    Platform request logs always have httpRequest set and a trace field (GCP auto-injects).
-    """
-    since = (datetime.now(timezone.utc) - timedelta(hours=hours_back)).isoformat()
-    filt = (
+) -> list[str]:
+    """Return up to sample_size trace IDs from platform request logs."""
+    since = (datetime.now(timezone.utc) - timedelta(hours=hours_back)).strftime(
+        "%Y-%m-%dT%H:%M:%SZ"
+    )
+    filter_ = (
         f'resource.type="cloud_run_revision" '
         f'resource.labels.service_name="{service}" '
-        f'resource.labels.project_id="{project}" '
         f'httpRequest.requestUrl!="" '
         f'trace!="" '
         f'timestamp>="{since}"'
     )
-    results = []
-    try:
-        for entry in client.list_log_entries(
-            resource_names=[f"projects/{project}"],
-            filter_=filt,
-            order_by="timestamp desc",
-            page_size=sample_size,
-            max_results=sample_size,
-        ):
-            if entry.trace:
-                results.append((entry.trace, entry.log_name))
-    except Exception as e:
-        print(f"  [warn] Could not query request logs for {service} in {project}: {e}")
-    return results
+    entries = _list_entries(client, project, filter_, sample_size)
+    return [e.trace for e in entries if e.trace]
 
 
-def _has_app_logs_with_trace(
-    client: logging_v2.Client,
+def _check_app_logs(
+    client: gcp_logging.Client,
     project: str,
     service: str,
     trace_id: str,
 ) -> tuple[bool, bool]:
     """
-    Check if a specific trace has correlated application logs.
-    Returns (has_app_logs, has_trace_field).
-      has_app_logs=False → no app logs found at all for this trace
-      has_app_logs=True, has_trace_field=True → OTEL / trace propagation working
-      has_app_logs=True, has_trace_field=False → app logs exist but trace dropped
+    Returns (has_app_logs, has_trace).
+    Queries for non-request logs correlated to this trace.
     """
-    filt = (
+    # App logs for this specific trace
+    filter_trace = (
         f'resource.type="cloud_run_revision" '
         f'resource.labels.service_name="{service}" '
-        f'resource.labels.project_id="{project}" '
         f'trace="{trace_id}" '
-        f'httpRequest.requestUrl=""'  # exclude the platform request log itself
+        f'httpRequest.requestUrl=""'
     )
-    try:
-        entries = list(client.list_log_entries(
-            resource_names=[f"projects/{project}"],
-            filter_=filt,
-            max_results=1,
-        ))
-        if entries:
-            return True, bool(entries[0].trace)
-        # No app logs found for this trace — check if any app logs exist at all
-        # by querying without the trace filter
-        filt_any = (
-            f'resource.type="cloud_run_revision" '
-            f'resource.labels.service_name="{service}" '
-            f'resource.labels.project_id="{project}" '
-            f'httpRequest.requestUrl=""'
-        )
-        any_entries = list(client.list_log_entries(
-            resource_names=[f"projects/{project}"],
-            filter_=filt_any,
-            max_results=1,
-        ))
-        if any_entries:
-            # App logs exist for the service but not correlated to this trace
-            return True, False
-        return False, False
-    except Exception as e:
-        print(f"  [warn] Could not query app logs for trace {trace_id}: {e}")
-        return False, False
+    entries = _list_entries(client, project, filter_trace, 1)
+    if entries:
+        return True, bool(entries[0].trace)
+
+    # No correlated app logs — check if the service emits any app logs at all
+    filter_any = (
+        f'resource.type="cloud_run_revision" '
+        f'resource.labels.service_name="{service}" '
+        f'httpRequest.requestUrl=""'
+    )
+    any_entries = _list_entries(client, project, filter_any, 1)
+    if any_entries:
+        return True, False  # app logs exist but not correlated to this trace
+
+    return False, False
 
 
 def check_trace_coverage(
@@ -128,11 +116,11 @@ def check_trace_coverage(
     hours_back: int = 24,
     sample_size: int = 20,
 ) -> ServiceTraceCoverage:
-    client = logging_v2.Client(project=project)
+    client = _make_client(project)
 
-    request_logs = _request_logs(client, project, service, hours_back, sample_size)
+    trace_ids = _request_logs(client, project, service, hours_back, sample_size)
 
-    if not request_logs:
+    if not trace_ids:
         return ServiceTraceCoverage(
             project=project, service=service, region=region,
             sample_requests=0,
@@ -140,7 +128,6 @@ def check_trace_coverage(
             no_app_logs=0,
             app_logs_without_trace=0,
             verdict="NO_DATA",
-            example_missing_trace_ids=[],
         )
 
     app_logs_with_trace = 0
@@ -148,8 +135,8 @@ def check_trace_coverage(
     app_logs_without_trace = 0
     missing_examples: list[str] = []
 
-    for trace_id, _ in request_logs:
-        has_app, has_trace = _has_app_logs_with_trace(client, project, service, trace_id)
+    for trace_id in trace_ids:
+        has_app, has_trace = _check_app_logs(client, project, service, trace_id)
         if has_app and has_trace:
             app_logs_with_trace += 1
         elif has_app and not has_trace:
@@ -161,21 +148,21 @@ def check_trace_coverage(
             if len(missing_examples) < 3:
                 missing_examples.append(trace_id)
 
-    # Verdict
-    if app_logs_with_trace == len(request_logs):
+    total = len(trace_ids)
+    if app_logs_with_trace == total:
         verdict = "OK"
     elif app_logs_with_trace > 0:
         verdict = "PARTIAL"
     elif app_logs_without_trace > 0:
-        verdict = "NO_TRACE"   # logs exist but trace field is missing
+        verdict = "NO_TRACE"
     else:
-        verdict = "DARK"       # no application logs at all
+        verdict = "DARK"
 
     return ServiceTraceCoverage(
         project=project,
         service=service,
         region=region,
-        sample_requests=len(request_logs),
+        sample_requests=total,
         app_logs_with_trace=app_logs_with_trace,
         no_app_logs=no_app_logs,
         app_logs_without_trace=app_logs_without_trace,
