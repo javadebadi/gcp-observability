@@ -12,6 +12,7 @@ import sys
 
 from gcp_observability.discovery.discover import run_discovery, print_inventory, inventory_to_json
 from gcp_observability.discovery.models import Inventory
+from gcp_observability.discovery.cloud_run import discover_cloud_run_services
 from gcp_observability.logs.trace_coverage import check_trace_coverage, ServiceTraceCoverage
 
 
@@ -64,21 +65,29 @@ def _load_or_discover(args) -> Inventory:
 
 
 def cmd_trace_coverage(args):
-    inventory = _load_or_discover(args)
+    # Collect unique (project, service, region) → list of known URLs
+    services: dict[tuple[str, str, str], list[str]] = {}
 
-    # Collect unique (project, service, region) from LB routes + standalone services
-    services: dict[tuple[str, str, str], list[str]] = {}  # key → list of external routes
-
-    for proj in inventory.projects:
-        for rule in proj.routing_rules:
-            if rule.cloud_run_service and rule.neg_project and rule.neg_region:
-                key = (rule.neg_project, rule.cloud_run_service, rule.neg_region)
-                route = f"https://{rule.host}{rule.path}"
-                services.setdefault(key, []).append(route)
-
-        for svc in proj.standalone_cloud_run:
-            key = (proj.project_id, svc["name"], svc["region"])
-            services.setdefault(key, []).append(svc["url"])
+    if hasattr(args, "inventory") and args.inventory:
+        # Load from a previously saved inventory — includes LB route context
+        inventory = _load_or_discover(args)
+        for proj in inventory.projects:
+            for rule in proj.routing_rules:
+                if rule.cloud_run_service and rule.neg_project and rule.neg_region:
+                    key = (rule.neg_project, rule.cloud_run_service, rule.neg_region)
+                    route = f"https://{rule.host}{rule.path}"
+                    services.setdefault(key, []).append(route)
+            for svc in proj.standalone_cloud_run:
+                key = (proj.project_id, svc["name"], svc["region"])
+                services.setdefault(key, []).append(svc["url"])
+    else:
+        # Direct Cloud Run discovery — no LB traversal needed for log analysis
+        project_ids = [p.strip() for p in args.projects.split(",") if p.strip()]
+        for project_id in project_ids:
+            print(f"[{project_id}] Listing Cloud Run services...")
+            for svc in discover_cloud_run_services(project_id):
+                key = (project_id, svc["name"], svc["region"])
+                services.setdefault(key, []).append(svc["url"])
 
     if not services:
         print("No Cloud Run services found in inventory.")
@@ -126,7 +135,7 @@ def _print_trace_coverage_report(results: list[tuple[ServiceTraceCoverage, list[
             for route in routes:
                 print(f"      route: {route}")
             if cov.sample_requests == 0:
-                print(f"      no requests in the last window — service may be idle")
+                print("      no requests in the last window — service may be idle")
             else:
                 pct = int(100 * cov.app_logs_with_trace / cov.sample_requests)
                 print(f"      sampled {cov.sample_requests} requests → "
@@ -136,7 +145,7 @@ def _print_trace_coverage_report(results: list[tuple[ServiceTraceCoverage, list[
                 if cov.no_app_logs:
                     print(f"      {cov.no_app_logs} requests had zero app log correlation (DARK)")
             if cov.example_missing_trace_ids:
-                print(f"      example trace IDs to inspect:")
+                print("      example trace IDs to inspect:")
                 for tid in cov.example_missing_trace_ids:
                     print(f"        {tid}")
 
