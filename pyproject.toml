@@ -5,8 +5,11 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
-    "google-cloud-compute>=1.49.0",
     "google-cloud-logging>=3.16.0",
     "google-cloud-resource-manager>=1.18.0",
-    "google-cloud-run>=0.16.1",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
 ]
