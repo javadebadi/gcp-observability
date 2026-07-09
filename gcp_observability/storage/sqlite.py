@@ -195,7 +195,8 @@ class SQLiteStore:
             "SELECT last_synced_at FROM sync_state WHERE sync_id = ?", (sync_id,)
         ).fetchone()
         if row and row["last_synced_at"]:
-            return datetime.fromisoformat(row["last_synced_at"])
+            dt = datetime.fromisoformat(row["last_synced_at"])
+            return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
         return None
 
     def set_watermark(
@@ -253,6 +254,14 @@ class SQLiteStore:
 # Helpers                                                             #
 # ------------------------------------------------------------------ #
 
+def _parse_utc(s: str) -> datetime:
+    """Parse an ISO string, normalise to UTC, strip sub-second if needed."""
+    dt = datetime.fromisoformat(s)
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
+
+
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
@@ -309,7 +318,7 @@ def _row_to_entry(row: sqlite3.Row) -> LogEntry:
     return LogEntry(
         log_name=row["log_name"],
         severity=row["severity"],
-        timestamp=datetime.fromisoformat(row["timestamp"]),
+        timestamp=_parse_utc(row["timestamp"]),
         payload=payload,
         payload_type=payload_type,
         resource_type=row["resource_type"] or "",

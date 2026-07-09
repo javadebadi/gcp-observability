@@ -10,7 +10,7 @@ specified per fetch call.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Iterator, Optional, Union
 
 import google.cloud.logging
@@ -57,7 +57,7 @@ class LogEntry:
         return {
             "log_name": self.log_name,
             "severity": self.severity,
-            "timestamp": self.timestamp.isoformat(),
+            "timestamp": _to_utc(self.timestamp).isoformat().replace("+00:00", "Z"),
             "payload": self.payload,
             "payload_type": self.payload_type,
             "resource_type": self.resource_type,
@@ -98,7 +98,7 @@ def _parse_entry(entry: Any) -> LogEntry:
     return LogEntry(
         log_name=entry.log_name or "",
         severity=str(entry.severity) if entry.severity else "DEFAULT",
-        timestamp=entry.timestamp,
+        timestamp=_to_utc(entry.timestamp),
         payload=payload,
         payload_type=payload_type,
         resource_type=entry.resource.type if entry.resource else "",
@@ -221,3 +221,10 @@ class Client:
         if self._default_project:
             return [self._default_project]
         return []
+
+
+def _to_utc(dt: datetime) -> datetime:
+    """Ensure a datetime is UTC-aware. Naïve datetimes are assumed UTC."""
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)

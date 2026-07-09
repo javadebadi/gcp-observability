@@ -32,10 +32,12 @@ class SyncResult:
     until: datetime     # end of the fetched window (new watermark)
 
     def __str__(self) -> str:
+        def _fmt(dt: datetime) -> str:
+            return dt.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
         return (
             f"[{self.sync_id}] fetched={self.fetched} "
             f"stored={self.stored} duplicates={self.duplicates} "
-            f"window={self.since.isoformat()} → {self.until.isoformat()}"
+            f"window={_fmt(self.since)} → {_fmt(self.until)}"
         )
 
 
