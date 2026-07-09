@@ -96,7 +96,7 @@ class Syncer:
             project:     Single project to query.
             projects:    Multiple projects to query in one call.
             sync_id:     Unique name for this sync job (used as watermark key).
-                         Use something descriptive: "prod-errors", "knaph-run-logs".
+                         Use something descriptive: "prod-errors", "my-project-run-logs".
             start:       Override the start time for this run.
                          Useful for backfilling. Ignored if a watermark exists
                          and `start` is earlier than the watermark.
