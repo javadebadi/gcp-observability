@@ -188,6 +188,12 @@ class Syncer:
         if end > now:
             end = now
         start = _ensure_utc(start)
+
+        # Resume from watermark — skip windows already processed on a prior run.
+        watermark = self._store.get_watermark(sync_id)
+        if watermark and watermark > start:
+            start = watermark
+
         window = timedelta(hours=window_hours)
 
         results: list[SyncResult] = []
