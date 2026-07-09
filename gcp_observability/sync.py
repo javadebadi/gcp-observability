@@ -109,6 +109,17 @@ class Syncer:
 
         # --- 1. Determine the fetch window ---
         watermark = self._store.get_watermark(sync_id)
+        if watermark and watermark > now:
+            # Watermark is in the future (e.g. backfill was run with a future
+            # end date). Nothing to fetch yet — skip without moving the watermark.
+            return SyncResult(
+                sync_id=sync_id,
+                fetched=0,
+                stored=0,
+                duplicates=0,
+                since=now,
+                until=now,
+            )
         if watermark:
             since = watermark
         elif start:
@@ -168,9 +179,13 @@ class Syncer:
             window_hours:           Size of each chunk in hours (default: 6).
             max_results_per_window: Optional cap per window.
         """
-        end = end or datetime.now(timezone.utc)
+        now = datetime.now(timezone.utc)
+        end = _ensure_utc(end) if end else now
+        # Cap end at now — future windows have no logs and would push the
+        # watermark into the future, causing sync() to miss logs later.
+        if end > now:
+            end = now
         start = _ensure_utc(start)
-        end = _ensure_utc(end)
         window = timedelta(hours=window_hours)
 
         results: list[SyncResult] = []
