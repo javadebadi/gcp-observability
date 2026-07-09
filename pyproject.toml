@@ -1,13 +1,42 @@
 [project]
 name = "gcp-observability"
 version = "0.1.0"
-description = "Add your description here"
+description = "Programmatic query builder for Google Cloud Logging filter language"
 readme = "README.md"
-requires-python = ">=3.14"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [
+    { name = "javadebadi", email = "javad.ebadi.1990@gmail.com" },
+]
+keywords = [
+    "google-cloud",
+    "cloud-logging",
+    "gcp",
+    "observability",
+    "logging",
+    "query-builder",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: System :: Logging",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
 dependencies = [
     "google-cloud-logging>=3.16.0",
-    "google-cloud-resource-manager>=1.18.0",
 ]
+
+[project.urls]
+Repository = "https://github.com/javadebadi/gcp-observability"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
 [dependency-groups]
 dev = [
