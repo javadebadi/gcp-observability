@@ -38,6 +38,12 @@ Repository = "https://github.com/javadebadi/gcp-observability"
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
+[tool.pytest.ini_options]
+addopts = "-m 'not integration'"
+markers = [
+    "integration: hits real GCP APIs — run with: pytest -m integration",
+]
+
 [dependency-groups]
 dev = [
     "pytest>=9.1.1",

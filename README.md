@@ -496,6 +496,120 @@ entries = gcp_client.list_entries(filter_=query)
 
 ---
 
+## Development
+
+### Prerequisites
+
+- Python 3.11+
+- [uv](https://docs.astral.sh/uv/) — used for dependency management
+- A GCP project with ADC configured (integration tests only)
+
+### Set up
+
+```bash
+git clone https://github.com/javadebadi/gcp-observability
+cd gcp-observability
+
+# Create venv and install all dependencies (including dev tools)
+uv sync --all-groups
+```
+
+### Run the unit tests
+
+Unit tests use no GCP credentials and run in milliseconds:
+
+```bash
+pytest
+```
+
+Expected output:
+
+```
+186 passed, 7 deselected in 0.17s
+```
+
+The `7 deselected` are the integration tests — excluded by default.
+
+### Run the integration tests
+
+Integration tests write real log entries to GCP, wait for indexing, sync
+them back, and assert the full pipeline output. They take ~35 seconds each
+and require a GCP project with `logging.logEntries.create` and
+`logging.logEntries.list` permissions.
+
+```bash
+# Authenticate once
+gcloud auth application-default login
+gcloud auth application-default set-quota-project YOUR_PROJECT_ID
+
+# Run integration tests
+GCP_TEST_PROJECT=your-project-id pytest -m integration -v
+```
+
+Each integration test uses a UUID-scoped log name so parallel runs and
+re-runs never interfere with each other.
+
+### Linting and type checking
+
+```bash
+# Check and auto-fix lint issues
+ruff check --fix .
+
+# Auto-format
+ruff format .
+
+# Type check
+ty check gcp_observability/
+```
+
+All three must be clean before submitting a PR. The CI equivalent is:
+
+```bash
+ruff check . && ty check gcp_observability/ && pytest
+```
+
+### Project layout
+
+```
+gcp_observability/
+├── logging/
+│   ├── expressions.py   # expression tree: F(), Comparison, And, Or, Not
+│   ├── query.py         # QueryBuilder fluent API
+│   ├── constants.py     # Severity, ResourceType
+│   └── client.py        # Client, LogEntry
+├── storage/
+│   └── sqlite.py        # SQLiteStore — local store + watermark tracking
+├── sync.py              # Syncer — incremental sync engine
+├── analysis/
+│   └── extract.py       # RegexExtractor, JsonExtractor, Pipeline, merge()
+└── queries/
+    └── general.py       # pre-built QueryBuilder presets
+
+examples/
+├── promo_key_tracker.py     # RegexExtractor on text logs
+└── job_lifecycle_tracker.py # Pipeline with multiple patterns
+
+tests/
+├── test_expressions.py
+├── test_query.py
+├── test_storage.py
+├── test_sync.py
+├── test_extract.py
+└── integration/
+    └── test_job_lifecycle.py   # real GCP — requires GCP_TEST_PROJECT
+```
+
+### Contributing
+
+1. Fork the repo and create a branch from `master`.
+2. Write tests for any new behaviour — check coverage with `pytest -v`.
+3. Make sure `ruff check .`, `ty check gcp_observability/`, and `pytest` all
+   pass before opening a PR.
+4. Keep PRs focused — one feature or fix per PR.
+5. Integration tests are welcome but not required for pure-Python changes.
+
+---
+
 ## License
 
 MIT — see [LICENSE](LICENSE).
