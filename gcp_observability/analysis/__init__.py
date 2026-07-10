@@ -1,3 +1,3 @@
-from .extract import JsonExtractor, RegexExtractor, extract
+from .extract import JsonExtractor, Pipeline, RegexExtractor, extract, merge
 
-__all__ = ["extract", "RegexExtractor", "JsonExtractor"]
+__all__ = ["extract", "merge", "RegexExtractor", "JsonExtractor", "Pipeline"]

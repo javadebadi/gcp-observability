@@ -5,7 +5,13 @@ from __future__ import annotations
 import re
 from datetime import datetime, timezone
 
-from gcp_observability.analysis.extract import JsonExtractor, RegexExtractor, extract
+from gcp_observability.analysis.extract import (
+    JsonExtractor,
+    Pipeline,
+    RegexExtractor,
+    extract,
+    merge,
+)
 from gcp_observability.logging.client import LogEntry
 
 
@@ -333,3 +339,141 @@ class TestPromoKeyPattern:
         assert rec is not None
         assert rec["_timestamp"] == _TS
         assert rec["_severity"] == "INFO"
+
+
+# ── Pipeline ───────────────────────────────────────────────────────────────────
+
+
+def _entry_at(payload: str, ts: datetime, insert_id: str = "e1") -> LogEntry:
+    """Helper that lets tests control the timestamp."""
+    return LogEntry(
+        log_name="projects/test/logs/app",
+        severity="INFO",
+        timestamp=ts,
+        payload=payload,
+        payload_type="text",
+        resource_type="cloud_run_revision",
+        resource_labels={},
+        labels={},
+        insert_id=insert_id,
+    )
+
+
+_T1 = datetime(2026, 1, 4, 10, 0, tzinfo=timezone.utc)
+_T2 = datetime(2026, 1, 4, 10, 5, tzinfo=timezone.utc)
+_T3 = datetime(2026, 1, 4, 10, 10, tzinfo=timezone.utc)
+
+
+class TestPipeline:
+    def _make_pipeline(self) -> Pipeline:
+        return Pipeline([
+            ("started", RegexExtractor(r"Running this job (?P<job_name>\w+)")),
+            ("failed",  RegexExtractor(r"Running this failed: (?P<reason>\w+)")),
+            ("done",    RegexExtractor(r"Running this finished in (?P<secs>\d+)s")),
+        ])
+
+    def test_each_record_tagged_with_source(self) -> None:
+        entries = [
+            _entry_at("Running this job ingest", _T1, "e1"),
+            _entry_at("Running this finished in 42s", _T2, "e2"),
+        ]
+        timeline = self._make_pipeline().run(entries)
+        assert timeline[0]["_source"] == "started"
+        assert timeline[1]["_source"] == "done"
+
+    def test_timeline_sorted_by_timestamp(self) -> None:
+        # Feed entries out of order — timeline must come back in order
+        entries = [
+            _entry_at("Running this finished in 10s", _T3, "e3"),
+            _entry_at("Running this job ingest",      _T1, "e1"),
+            _entry_at("Running this failed: OOM",     _T2, "e2"),
+        ]
+        timeline = self._make_pipeline().run(entries)
+        timestamps = [r["_timestamp"] for r in timeline]
+        assert timestamps == sorted(timestamps)
+
+    def test_extracted_fields_present(self) -> None:
+        entries = [
+            _entry_at("Running this job ingest", _T1, "e1"),
+            _entry_at("Running this failed: OOM", _T2, "e2"),
+        ]
+        timeline = self._make_pipeline().run(entries)
+        assert timeline[0]["job_name"] == "ingest"
+        assert timeline[1]["reason"] == "OOM"
+
+    def test_unmatched_entries_excluded(self) -> None:
+        entries = [
+            _entry_at("Running this job ingest", _T1, "e1"),
+            _entry_at("something completely unrelated", _T2, "e2"),
+        ]
+        timeline = self._make_pipeline().run(entries)
+        assert len(timeline) == 1
+        assert timeline[0]["_source"] == "started"
+
+    def test_empty_entries_returns_empty(self) -> None:
+        assert self._make_pipeline().run([]) == []
+
+    def test_no_matches_returns_empty(self) -> None:
+        entries = [_entry_at("unrelated log", _T1, "e1")]
+        assert self._make_pipeline().run(entries) == []
+
+    def test_overlap_produces_two_records(self) -> None:
+        # Documents the overlap behaviour: one entry matching two patterns
+        # appears twice — useful signal that patterns need tightening
+        p = Pipeline([
+            ("a", RegexExtractor(r"(?P<val>foo)")),
+            ("b", RegexExtractor(r"(?P<val>foo)")),
+        ])
+        timeline = p.run([_entry_at("foo bar", _T1, "e1")])
+        assert len(timeline) == 2
+        sources = {r["_source"] for r in timeline}
+        assert sources == {"a", "b"}
+
+    def test_metadata_present_on_all_records(self) -> None:
+        entries = [
+            _entry_at("Running this job ingest", _T1, "e1"),
+            _entry_at("Running this failed: OOM", _T2, "e2"),
+        ]
+        for rec in self._make_pipeline().run(entries):
+            assert "_timestamp" in rec
+            assert "_severity" in rec
+            assert "_insert_id" in rec
+            assert "_log_name" in rec
+            assert "_source" in rec
+
+
+# ── merge() ────────────────────────────────────────────────────────────────────
+
+
+class TestMerge:
+    def test_merges_two_lists(self) -> None:
+        a = [{"_timestamp": _T1, "x": 1}]
+        b = [{"_timestamp": _T2, "x": 2}]
+        result = merge(a, b)
+        assert len(result) == 2
+
+    def test_sorted_by_timestamp(self) -> None:
+        a = [{"_timestamp": _T3, "x": "c"}, {"_timestamp": _T1, "x": "a"}]
+        b = [{"_timestamp": _T2, "x": "b"}]
+        result = merge(a, b)
+        assert [r["x"] for r in result] == ["a", "b", "c"]
+
+    def test_merge_three_lists(self) -> None:
+        a = [{"_timestamp": _T1, "src": "a"}]
+        b = [{"_timestamp": _T2, "src": "b"}]
+        c = [{"_timestamp": _T3, "src": "c"}]
+        result = merge(a, b, c)
+        assert [r["src"] for r in result] == ["a", "b", "c"]
+
+    def test_empty_lists_ignored(self) -> None:
+        a = [{"_timestamp": _T1, "x": 1}]
+        result = merge(a, [], [])
+        assert len(result) == 1
+
+    def test_all_empty(self) -> None:
+        assert merge([], []) == []
+
+    def test_single_list_passthrough(self) -> None:
+        a = [{"_timestamp": _T2, "x": 2}, {"_timestamp": _T1, "x": 1}]
+        result = merge(a)
+        assert [r["x"] for r in result] == [1, 2]

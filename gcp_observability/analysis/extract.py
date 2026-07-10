@@ -224,6 +224,79 @@ def _dig(payload: object, path: str) -> Optional[str]:
     return str(value) if value is not None else None
 
 
+# ── Pipeline ───────────────────────────────────────────────────────────────────
+
+
+class Pipeline:
+    """
+    Run multiple named extractors against the same entries and merge the
+    results into a single timeline sorted by ``_timestamp``.
+
+    Each extractor is given a name that is stamped as ``_source`` on every
+    record it produces, so you can tell which pattern matched which entry when
+    reading the merged timeline.
+
+    Patterns should be designed not to overlap — if an entry matches more than
+    one extractor it will appear multiple times in the timeline, which is a
+    useful signal that the patterns need tightening.
+
+    Args:
+        extractors: List of ``(name, extractor)`` pairs. The name becomes the
+                    ``_source`` value on each matched record.
+
+    Example::
+
+        pipeline = Pipeline([
+            ("job_started",   RegexExtractor(r"Running this job (?P<job_name>\\w+)")),
+            ("config_loaded", RegexExtractor(r"Running this with config (?P<config>\\w+)")),
+            ("job_failed",    RegexExtractor(r"Running this failed: (?P<reason>.+)")),
+        ])
+
+        timeline = pipeline.run(entries)
+        for event in timeline:
+            print(event["_source"], event["_timestamp"], event)
+    """
+
+    def __init__(
+        self,
+        extractors: list[tuple[str, Callable[[LogEntry], Optional[dict]]]],
+    ) -> None:
+        self._extractors = extractors
+
+    def run(self, entries: list[LogEntry]) -> list[dict]:
+        """
+        Apply every extractor to *entries*, tag each record with ``_source``,
+        and return all results merged into a single ``_timestamp``-sorted list.
+        """
+        all_records: list[dict] = []
+        for source, extractor in self._extractors:
+            for record in extract(entries, extractor):
+                all_records.append({"_source": source, **record})
+        return sorted(all_records, key=lambda r: r["_timestamp"])
+
+
+# ── merge() ────────────────────────────────────────────────────────────────────
+
+
+def merge(*record_lists: list[dict]) -> list[dict]:
+    """
+    Merge any number of extracted record lists into one timeline sorted by
+    ``_timestamp``.
+
+    Use this when you've already run extractors separately and just need to
+    combine the results. For running extractors + merging in one step, use
+    ``Pipeline`` instead.
+
+    Example::
+
+        a = extractor_a.extract(entries)
+        b = extractor_b.extract(entries)
+        timeline = merge(a, b)
+    """
+    combined = [rec for lst in record_lists for rec in lst]
+    return sorted(combined, key=lambda r: r["_timestamp"])
+
+
 # Preserve type alias for downstream type hints
 ExtractedRecord = dict[str, object]
 Timestamp = datetime
