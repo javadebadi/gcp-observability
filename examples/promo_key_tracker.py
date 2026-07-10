@@ -13,8 +13,8 @@ This script:
   2. On each run it resumes from where it left off — no windows are re-fetched.
      If you haven't run it in a week, it catches up all missing windows on the
      next run automatically.
-  3. Reads from the local store (no Cloud Logging charges) and prints each
-     player's promo usage.
+  3. Reads from the local store (no Cloud Logging charges), extracts structured
+     fields using RegexExtractor, and prints each player's promo usage.
 
 Usage
 -----
@@ -32,11 +32,11 @@ SQLite database file to live.
 
 from __future__ import annotations
 
-import re
 from collections import defaultdict
 from datetime import datetime, timezone
 
-from gcp_observability import Client, QueryBuilder, SQLiteStore, Syncer, Severity
+from gcp_observability import Client, QueryBuilder, SQLiteStore, Severity, Syncer
+from gcp_observability.analysis import RegexExtractor
 
 # ── Configuration ──────────────────────────────────────────────────────────────
 
@@ -45,11 +45,13 @@ DB_PATH = "promo_logs.db"  # local SQLite file (created on first run)
 SYNC_ID = "promo-key-usage"  # unique name for this sync job
 START_DATE = datetime(2026, 1, 4, tzinfo=timezone.utc)
 
-# ── Log pattern ────────────────────────────────────────────────────────────────
+# ── Extractor ──────────────────────────────────────────────────────────────────
 
 # Matches: "player 2342342 increased level of heart to 234 with promo key ..."
-_PATTERN = re.compile(
-    r"player\s+(\d+)\s+increased level of heart to\s+(\d+)\s+with promo key"
+# Named groups become keys in every extracted record automatically.
+_EXTRACTOR = RegexExtractor(
+    r"player (?P<player_id>\d+) increased level of heart to (?P<level>\d+)"
+    r" with promo key"
 )
 
 # ── Sync ───────────────────────────────────────────────────────────────────────
@@ -97,13 +99,22 @@ def sync() -> SQLiteStore:
     return store
 
 
-# ── Analyzer ───────────────────────────────────────────────────────────────────
+# ── Analyze ────────────────────────────────────────────────────────────────────
 
 
 def analyze(store: SQLiteStore) -> None:
     """
-    Read promo-key log entries from the local store and print a summary
-    of player_id and the total promo amount each player received.
+    Extract structured fields from stored entries and print a promo usage summary.
+
+    RegexExtractor produces one dict per matching entry:
+        {
+            "_timestamp": datetime,
+            "_severity":  "INFO",
+            "_insert_id": "...",
+            "_log_name":  "projects/.../logs/...",
+            "player_id":  "2342342",   # named group from regex
+            "level":      "234",       # named group from regex
+        }
     """
     entries = store.query(
         search="promo key instead of paying",
@@ -115,46 +126,35 @@ def analyze(store: SQLiteStore) -> None:
         print("\nNo promo key entries found in local store.")
         return
 
-    # player_id → list of promo amounts
-    player_promos: dict[str, list[int]] = defaultdict(list)
-    unmatched = 0
-
-    for entry in entries:
-        # payload is either a plain string or a dict with a "message" key
-        text = (
-            entry.payload
-            if isinstance(entry.payload, str)
-            else entry.payload.get("message", "")
-        )
-        match = _PATTERN.search(text)
-        if match:
-            player_id = match.group(1)
-            promo_amount = int(match.group(2))
-            player_promos[player_id].append(promo_amount)
-        else:
-            unmatched += 1
+    records = _EXTRACTOR.extract(entries)
+    unmatched = len(entries) - len(records)
 
     print(
         f"\nAnalyzed {len(entries)} entries  "
-        f"({len(player_promos)} unique players  {unmatched} unmatched)\n"
+        f"({len(records)} matched  {unmatched} unmatched)\n"
     )
+
+    # Aggregate: player_id → list of promo levels
+    player_levels: dict[str, list[int]] = defaultdict(list)
+    for rec in records:
+        player_levels[rec["player_id"]].append(int(rec["level"]))
 
     # Sort by total promo amount descending
     ranked = sorted(
-        player_promos.items(),
+        player_levels.items(),
         key=lambda item: sum(item[1]),
         reverse=True,
     )
 
-    header = f"{'player_id':<15}  {'uses':>6}  {'total_amount':>14}  {'avg_amount':>12}"
+    header = f"{'player_id':<15}  {'uses':>6}  {'total_level':>12}  {'avg_level':>10}"
     print(header)
     print("-" * len(header))
-    for player_id, amounts in ranked:
+    for player_id, levels in ranked:
         print(
             f"{player_id:<15}  "
-            f"{len(amounts):>6}  "
-            f"{sum(amounts):>14}  "
-            f"{sum(amounts) / len(amounts):>11.1f}"
+            f"{len(levels):>6}  "
+            f"{sum(levels):>12}  "
+            f"{sum(levels) / len(levels):>9.1f}"
         )
 
 
