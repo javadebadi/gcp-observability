@@ -170,7 +170,7 @@ class Syncer:
         sync_id: str,
         start: datetime,
         end: Optional[datetime] = None,
-        window_hours: int = 6,
+        window_hours: float = 6,
         max_results_per_window: Optional[int] = None,
     ) -> list[SyncResult]:
         """
