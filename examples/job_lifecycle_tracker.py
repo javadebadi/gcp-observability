@@ -34,7 +34,7 @@ import os
 from datetime import datetime
 
 from gcp_observability import Client, QueryBuilder, SQLiteStore, Syncer
-from gcp_observability.analysis import Pipeline, RegexExtractor
+from gcp_observability.analysis import Pipeline, RegexExtractor, insights
 
 # ── Configuration ──────────────────────────────────────────────────────────────
 
@@ -111,13 +111,25 @@ def analyze(store: SQLiteStore) -> list[dict]:
         print("\nNo events matched the pipeline patterns.")
         return []
 
-    print(f"\n{'timestamp':<32}  {'_source':<10}  details")
-    print("-" * 80)
+    # ── Raw timeline ───────────────────────────────────────────────────────────
+    print(f"\n{'timestamp':<22}  {'source':<10}  details")
+    print("-" * 72)
     for event in timeline:
         ts = event["_timestamp"].strftime("%Y-%m-%dT%H:%M:%S")
         src = event["_source"]
         details = {k: v for k, v in event.items() if not k.startswith("_")}
-        print(f"{ts:<32}  {src:<10}  {details}")
+        print(f"{ts:<22}  {src:<10}  {details}")
+
+    # ── Per-job summaries ──────────────────────────────────────────────────────
+    jobs = insights.group_by(timeline, by="job_id")
+
+    print(f"\n{'job_id':<15}  {'status':<10}  {'wall_time':>10}  {'steps'}")
+    print("-" * 72)
+    for job_id, events in jobs.items():
+        s = insights.summarize_job(events)
+        wall = f"{s['wall_time_s']:.1f}s" if s["wall_time_s"] is not None else "?"
+        step_str = "  ".join(f"{k}={v}s" for k, v in s["steps"].items())
+        print(f"{job_id:<15}  {s['status'] or '?':<10}  {wall:>10}  {step_str}")
 
     return timeline
 
