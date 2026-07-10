@@ -1,9 +1,7 @@
-import pytest
 from gcp_observability.logging.expressions import (
     And,
     Comparison,
     F,
-    Field,
     Not,
     Or,
     Raw,
@@ -29,7 +27,10 @@ class TestFormatValue:
         assert _format_value("cloud_run_revision") == "cloud_run_revision"
 
     def test_string_with_slash_gets_quoted(self):
-        assert _format_value("projects/my-project/logs/app") == '"projects/my-project/logs/app"'
+        assert (
+            _format_value("projects/my-project/logs/app")
+            == '"projects/my-project/logs/app"'
+        )
 
     def test_string_with_space_gets_quoted(self):
         assert _format_value("hello world") == '"hello world"'
@@ -52,13 +53,21 @@ class TestComparison:
         assert Comparison("severity", ">=", "WARNING").build() == "severity>=WARNING"
 
     def test_lt(self):
-        assert Comparison("httpRequest.status", "<", 500).build() == "httpRequest.status<500"
+        assert (
+            Comparison("httpRequest.status", "<", 500).build()
+            == "httpRequest.status<500"
+        )
 
     def test_has(self):
-        assert Comparison("textPayload", ":", "timeout").build() == "textPayload:timeout"
+        assert (
+            Comparison("textPayload", ":", "timeout").build() == "textPayload:timeout"
+        )
 
     def test_quoted_value(self):
-        assert Comparison("logName", "=", "projects/p/logs/app").build() == 'logName="projects/p/logs/app"'
+        assert (
+            Comparison("logName", "=", "projects/p/logs/app").build()
+            == 'logName="projects/p/logs/app"'
+        )
 
 
 class TestAnd:
@@ -101,7 +110,10 @@ class TestOr:
             Comparison("resource.type", "=", "cloud_run_revision"),
             Comparison("resource.type", "=", "cloud_function"),
         )
-        assert expr.build() == "(resource.type=cloud_run_revision) OR (resource.type=cloud_function)"
+        assert (
+            expr.build()
+            == "(resource.type=cloud_run_revision) OR (resource.type=cloud_function)"
+        )
 
     def test_flattens_nested_or(self):
         a = Comparison("a", "=", "1")
@@ -144,7 +156,10 @@ class TestNot:
 
 class TestRaw:
     def test_passthrough(self):
-        assert Raw('jsonPayload.message=~".*panic.*"').build() == 'jsonPayload.message=~".*panic.*"'
+        assert (
+            Raw('jsonPayload.message=~".*panic.*"').build()
+            == 'jsonPayload.message=~".*panic.*"'
+        )
 
 
 class TestField:
@@ -170,21 +185,32 @@ class TestField:
         assert F("textPayload").has("timeout").build() == "textPayload:timeout"
 
     def test_dot_chaining(self):
-        assert (F("resource").labels.zone == "us-central1-a").build() == 'resource.labels.zone="us-central1-a"'
+        assert (
+            F("resource").labels.zone == "us-central1-a"
+        ).build() == 'resource.labels.zone="us-central1-a"'
 
     def test_bracket_access_quotes_key(self):
-        assert (F("labels")["k8s-pod/app"] == "my-service").build() == 'labels."k8s-pod/app"="my-service"'
+        assert (
+            F("labels")["k8s-pod/app"] == "my-service"
+        ).build() == 'labels."k8s-pod/app"="my-service"'
 
     def test_bracket_access_simple_key(self):
-        assert (F("resource.labels")["zone"] == "us-east1").build() == 'resource.labels."zone"="us-east1"'
+        assert (
+            F("resource.labels")["zone"] == "us-east1"
+        ).build() == 'resource.labels."zone"="us-east1"'
 
     def test_and_operator(self):
         expr = (F("severity") >= "ERROR") & (F("resource.type") == "gce_instance")
         assert expr.build() == "severity>=ERROR\nAND resource.type=gce_instance"
 
     def test_or_operator(self):
-        expr = (F("resource.type") == "cloud_run_revision") | (F("resource.type") == "cloud_function")
-        assert "(resource.type=cloud_run_revision) OR (resource.type=cloud_function)" == expr.build()
+        expr = (F("resource.type") == "cloud_run_revision") | (
+            F("resource.type") == "cloud_function"
+        )
+        assert (
+            "(resource.type=cloud_run_revision) OR (resource.type=cloud_function)"
+            == expr.build()
+        )
 
     def test_not_operator(self):
         expr = ~F("textPayload").has("healthcheck")

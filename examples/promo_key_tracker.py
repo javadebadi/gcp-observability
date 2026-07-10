@@ -40,9 +40,9 @@ from gcp_observability import Client, QueryBuilder, SQLiteStore, Syncer, Severit
 
 # ── Configuration ──────────────────────────────────────────────────────────────
 
-PROJECT    = "my-gcp-project"       # your GCP project ID
-DB_PATH    = "promo_logs.db"        # local SQLite file (created on first run)
-SYNC_ID    = "promo-key-usage"      # unique name for this sync job
+PROJECT = "my-gcp-project"  # your GCP project ID
+DB_PATH = "promo_logs.db"  # local SQLite file (created on first run)
+SYNC_ID = "promo-key-usage"  # unique name for this sync job
 START_DATE = datetime(2026, 1, 4, tzinfo=timezone.utc)
 
 # ── Log pattern ────────────────────────────────────────────────────────────────
@@ -54,6 +54,7 @@ _PATTERN = re.compile(
 
 # ── Sync ───────────────────────────────────────────────────────────────────────
 
+
 def sync() -> SQLiteStore:
     """
     Pull matching logs from Cloud Logging into local storage.
@@ -63,7 +64,7 @@ def sync() -> SQLiteStore:
     the next run.
     """
     client = Client()
-    store  = SQLiteStore(DB_PATH)
+    store = SQLiteStore(DB_PATH)
     syncer = Syncer(client, store)
 
     watermark = store.get_watermark(SYNC_ID)
@@ -74,27 +75,30 @@ def sync() -> SQLiteStore:
 
     results = syncer.backfill(
         QueryBuilder()
-            .severity_eq(Severity.INFO)
-            .global_search("promo key instead of paying"),
+        .severity_eq(Severity.INFO)
+        .global_search("promo key instead of paying"),
         project=PROJECT,
         sync_id=SYNC_ID,
         start=START_DATE,
         # end defaults to now — capped automatically, never goes into the future
-        window_hours=0.5,   # 30-minute intervals
+        window_hours=0.5,  # 30-minute intervals
     )
 
     windows_with_data = [r for r in results if r.fetched > 0]
     total_fetched = sum(r.fetched for r in results)
-    total_stored  = sum(r.stored  for r in results)
+    total_stored = sum(r.stored for r in results)
 
-    print(f"Processed {len(results)} windows  "
-          f"({len(windows_with_data)} had data)  "
-          f"fetched={total_fetched}  stored={total_stored}")
+    print(
+        f"Processed {len(results)} windows  "
+        f"({len(windows_with_data)} had data)  "
+        f"fetched={total_fetched}  stored={total_stored}"
+    )
     print(f"New watermark: {store.get_watermark(SYNC_ID).isoformat()}")
     return store
 
 
 # ── Analyzer ───────────────────────────────────────────────────────────────────
+
 
 def analyze(store: SQLiteStore) -> None:
     """
@@ -124,14 +128,16 @@ def analyze(store: SQLiteStore) -> None:
         )
         match = _PATTERN.search(text)
         if match:
-            player_id  = match.group(1)
+            player_id = match.group(1)
             promo_amount = int(match.group(2))
             player_promos[player_id].append(promo_amount)
         else:
             unmatched += 1
 
-    print(f"\nAnalyzed {len(entries)} entries  "
-          f"({len(player_promos)} unique players  {unmatched} unmatched)\n")
+    print(
+        f"\nAnalyzed {len(entries)} entries  "
+        f"({len(player_promos)} unique players  {unmatched} unmatched)\n"
+    )
 
     # Sort by total promo amount descending
     ranked = sorted(

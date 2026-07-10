@@ -16,7 +16,7 @@ import json
 import sqlite3
 from contextlib import contextmanager
 from datetime import datetime, timezone
-from typing import Generator, Iterator, Optional
+from typing import Generator, Optional
 
 from ..logging.client import LogEntry
 
@@ -175,7 +175,9 @@ class SQLiteStore:
 
         where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
         direction = "DESC" if order.lower() == "desc" else "ASC"
-        sql = f"SELECT * FROM log_entries {where} ORDER BY timestamp {direction} LIMIT ?"
+        sql = (
+            f"SELECT * FROM log_entries {where} ORDER BY timestamp {direction} LIMIT ?"
+        )
         params.append(limit)
 
         rows = self._conn.execute(sql, params).fetchall()
@@ -254,6 +256,7 @@ class SQLiteStore:
 # Helpers                                                             #
 # ------------------------------------------------------------------ #
 
+
 def _parse_utc(s: str) -> datetime:
     """Parse an ISO string, normalise to UTC, strip sub-second if needed."""
     dt = datetime.fromisoformat(s)
@@ -274,8 +277,7 @@ def _to_iso(dt: datetime) -> str:
 
 def _entry_to_row(entry: LogEntry, synced_at: str) -> dict:
     payload = (
-        json.dumps(entry.payload) if isinstance(entry.payload, dict)
-        else entry.payload
+        json.dumps(entry.payload) if isinstance(entry.payload, dict) else entry.payload
     )
     return {
         "insert_id": entry.insert_id or f"_no_id_{entry.timestamp.isoformat()}",

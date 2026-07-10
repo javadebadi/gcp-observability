@@ -27,7 +27,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from typing import Optional, Union
 
-from .expressions import And, Comparison, Expr, F, Not, Or, Raw
+from .expressions import Comparison, Expr, F, Raw
 
 
 class QueryBuilder:
@@ -69,7 +69,7 @@ class QueryBuilder:
         """
         if log_id:
             return self.log_name(f"projects/{project_id}/logs/{log_id}")
-        return self._add(F("logName").has(f"projects/{project_id}"))
+        return self._add(F("logName").has(f"projects/{project_id}/"))
 
     # ------------------------------------------------------------------ #
     # Severity                                                             #
@@ -97,9 +97,8 @@ class QueryBuilder:
 
     def severity_range(self, low: str, high: str) -> QueryBuilder:
         """Match severities between low and high (inclusive)."""
-        return (
-            self._add(Comparison("severity", ">=", low))
-                ._add(Comparison("severity", "<=", high))
+        return self._add(Comparison("severity", ">=", low))._add(
+            Comparison("severity", "<=", high)
         )
 
     # ------------------------------------------------------------------ #
@@ -124,7 +123,9 @@ class QueryBuilder:
             self._add(F("timestamp") < _to_iso(end))
         return self
 
-    def since(self, hours: float = 0, minutes: float = 0, days: float = 0) -> QueryBuilder:
+    def since(
+        self, hours: float = 0, minutes: float = 0, days: float = 0
+    ) -> QueryBuilder:
         """Shorthand: logs from the last N hours/minutes/days until now."""
         delta = timedelta(hours=hours, minutes=minutes, days=days)
         start = datetime.now(timezone.utc) - delta
@@ -223,7 +224,9 @@ class QueryBuilder:
     def insert_id(self, id: str) -> QueryBuilder:
         return self._add(F("insertId") == id)
 
-    def source_location(self, file: Optional[str] = None, function: Optional[str] = None) -> QueryBuilder:
+    def source_location(
+        self, file: Optional[str] = None, function: Optional[str] = None
+    ) -> QueryBuilder:
         if file:
             self._add(F("sourceLocation.file").has(file))
         if function:
@@ -233,6 +236,21 @@ class QueryBuilder:
     # ------------------------------------------------------------------ #
     # Arbitrary expressions                                                #
     # ------------------------------------------------------------------ #
+
+    def global_search(self, value: str) -> QueryBuilder:
+        """
+        Search across all log fields at once (global restriction).
+
+        Produces a bare quoted string with no field prefix, which Cloud Logging
+        matches against textPayload, jsonPayload, protoPayload, labels, and
+        other string fields simultaneously.
+
+        Example:
+            .global_search("ValueError: Bad")
+            → "ValueError: Bad"
+        """
+        escaped = value.replace("\\", "\\\\").replace('"', '\\"')
+        return self._add(Raw(f'"{escaped}"'))
 
     def where(self, expr: Expr) -> QueryBuilder:
         """Add a raw Expr (built with F() / operators) to the query."""
@@ -262,6 +280,7 @@ class QueryBuilder:
 # ------------------------------------------------------------------ #
 # Helpers                                                             #
 # ------------------------------------------------------------------ #
+
 
 def _to_iso(dt: Union[str, datetime]) -> str:
     if isinstance(dt, str):

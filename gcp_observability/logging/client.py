@@ -13,7 +13,6 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Iterator, Optional, Union
 
-import google.cloud.logging
 from google.cloud.logging import Client as _GCPClient
 
 from .query import QueryBuilder
@@ -26,8 +25,8 @@ class LogEntry:
     log_name: str
     severity: str
     timestamp: datetime
-    payload: Any                        # str | dict depending on log type
-    payload_type: str                   # "text" | "json" | "proto"
+    payload: Any  # str | dict depending on log type
+    payload_type: str  # "text" | "json" | "proto"
     resource_type: str
     resource_labels: dict[str, str]
     labels: dict[str, str]
@@ -50,6 +49,7 @@ class LogEntry:
         parts = self.log_name.split("/logs/", 1)
         if len(parts) == 2:
             from urllib.parse import unquote
+
             return unquote(parts[1])
         return ""
 
@@ -164,13 +164,15 @@ class Client:
             order_by:    "timestamp desc" (newest first) or "timestamp asc".
             max_results: Cap the total number of entries returned.
         """
-        return list(self.iter(
-            query,
-            project=project,
-            projects=projects,
-            order_by=order_by,
-            max_results=max_results,
-        ))
+        return list(
+            self.iter(
+                query,
+                project=project,
+                projects=projects,
+                order_by=order_by,
+                max_results=max_results,
+            )
+        )
 
     def iter(
         self,

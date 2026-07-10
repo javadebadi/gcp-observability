@@ -69,12 +69,34 @@ class TestSave:
 
 class TestQuery:
     def _populate(self, store: SQLiteStore) -> None:
-        store.save([
-            _entry("e1", severity="ERROR",   timestamp="2026-07-09T10:00:00Z", project_log="projects/proj-a/logs/app"),
-            _entry("e2", severity="WARNING", timestamp="2026-07-09T10:10:00Z", project_log="projects/proj-a/logs/app"),
-            _entry("e3", severity="INFO",    timestamp="2026-07-09T10:20:00Z", project_log="projects/proj-b/logs/app"),
-            _entry("e4", severity="ERROR",   timestamp="2026-07-09T10:30:00Z", project_log="projects/proj-b/logs/run"),
-        ])
+        store.save(
+            [
+                _entry(
+                    "e1",
+                    severity="ERROR",
+                    timestamp="2026-07-09T10:00:00Z",
+                    project_log="projects/proj-a/logs/app",
+                ),
+                _entry(
+                    "e2",
+                    severity="WARNING",
+                    timestamp="2026-07-09T10:10:00Z",
+                    project_log="projects/proj-a/logs/app",
+                ),
+                _entry(
+                    "e3",
+                    severity="INFO",
+                    timestamp="2026-07-09T10:20:00Z",
+                    project_log="projects/proj-b/logs/app",
+                ),
+                _entry(
+                    "e4",
+                    severity="ERROR",
+                    timestamp="2026-07-09T10:30:00Z",
+                    project_log="projects/proj-b/logs/run",
+                ),
+            ]
+        )
 
     def test_query_all(self, store: SQLiteStore) -> None:
         self._populate(store)
@@ -105,15 +127,17 @@ class TestQuery:
     def test_filter_time_range(self, store: SQLiteStore) -> None:
         self._populate(store)
         start = datetime(2026, 7, 9, 10, 5, 0, tzinfo=timezone.utc)
-        end   = datetime(2026, 7, 9, 10, 25, 0, tzinfo=timezone.utc)
+        end = datetime(2026, 7, 9, 10, 25, 0, tzinfo=timezone.utc)
         results = store.query(start=start, end=end, limit=100)
         assert len(results) == 2
 
     def test_filter_search(self, store: SQLiteStore) -> None:
-        store.save([
-            _entry("s1", payload="timeout connecting to db"),
-            _entry("s2", payload="ValueError: Bad input"),
-        ])
+        store.save(
+            [
+                _entry("s1", payload="timeout connecting to db"),
+                _entry("s2", payload="ValueError: Bad input"),
+            ]
+        )
         results = store.query(search="ValueError", limit=100)
         assert len(results) == 1
         assert "ValueError" in results[0].payload

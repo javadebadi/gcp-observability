@@ -1,14 +1,13 @@
 """Tests for Syncer — all use a mock Client so no GCP calls are made."""
 
 from datetime import datetime, timedelta, timezone
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
-import pytest
 
 from gcp_observability.logging.client import LogEntry
 from gcp_observability.storage.sqlite import SQLiteStore
-from gcp_observability.sync import Syncer, SyncResult
-from gcp_observability import QueryBuilder, Severity
+from gcp_observability.sync import Syncer
+from gcp_observability import QueryBuilder
 
 
 def _make_entry(insert_id: str, ts: str, severity: str = "ERROR") -> LogEntry:
@@ -61,7 +60,9 @@ class TestSync:
 
         # Second call's filter should start from the first watermark
         _, kwargs = client.iter.call_args
-        filter_str = kwargs.get("filter_", client.iter.call_args[0][0] if client.iter.call_args[0] else "")
+        filter_str = kwargs.get(
+            "filter_", client.iter.call_args[0][0] if client.iter.call_args[0] else ""
+        )
         assert watermark_after_first.strftime("%Y-%m-%dT%H:%M") in filter_str
 
     def test_duplicates_not_double_stored(self) -> None:
@@ -79,8 +80,8 @@ class TestSync:
         r2 = syncer.sync(QueryBuilder(), project="p", sync_id="s")
 
         assert r1.stored == 1
-        assert r2.stored == 0          # duplicate ignored
-        assert store.count() == 1      # only one row in store
+        assert r2.stored == 0  # duplicate ignored
+        assert store.count() == 1  # only one row in store
 
     def test_future_watermark_skips_sync(self) -> None:
         client = MagicMock()
@@ -95,7 +96,7 @@ class TestSync:
 
         assert result.fetched == 0
         assert result.stored == 0
-        client.iter.assert_not_called()   # Cloud Logging never hit
+        client.iter.assert_not_called()  # Cloud Logging never hit
 
     def test_sync_result_fields(self) -> None:
         entries = [_make_entry("e1", "2026-07-09T10:00:00+00:00")]
@@ -123,7 +124,7 @@ class TestBackfill:
             end=datetime(2026, 6, 2, tzinfo=timezone.utc),
             window_hours=6,
         )
-        assert len(results) == 4   # 24h / 6h = 4 windows
+        assert len(results) == 4  # 24h / 6h = 4 windows
 
     def test_future_end_is_capped_at_now(self) -> None:
         client = MagicMock()
@@ -155,7 +156,9 @@ class TestBackfill:
         client.iter.return_value = iter([])
         far_future = datetime.now(timezone.utc) + timedelta(days=30)
         syncer.backfill(
-            QueryBuilder(), project="p", sync_id="bf",
+            QueryBuilder(),
+            project="p",
+            sync_id="bf",
             start=datetime.now(timezone.utc) - timedelta(hours=1),
             end=far_future,
             window_hours=1,
@@ -166,7 +169,7 @@ class TestBackfill:
         client.iter.return_value = iter([new_entry])
         result = syncer.sync(QueryBuilder(), project="p", sync_id="bf")
 
-        assert result.fetched == 1    # not skipped
+        assert result.fetched == 1  # not skipped
         assert result.stored == 1
 
     def test_stores_entries_across_windows(self) -> None:
@@ -198,7 +201,9 @@ class TestBackfill:
 
         end = datetime(2026, 6, 2, tzinfo=timezone.utc)
         syncer.backfill(
-            QueryBuilder(), project="p", sync_id="bf",
+            QueryBuilder(),
+            project="p",
+            sync_id="bf",
             start=datetime(2026, 6, 1, tzinfo=timezone.utc),
             end=end,
             window_hours=6,

@@ -132,6 +132,7 @@ class Field:
     """
 
     __slots__ = ("_name",)
+    _name: str  # slot type annotation so type checkers don't resolve via __getattr__
 
     def __init__(self, name: str) -> None:
         object.__setattr__(self, "_name", name)
@@ -144,10 +145,10 @@ class Field:
     def __getitem__(self, key: str) -> Field:
         return Field(f'{self._name}."{key}"')
 
-    def __eq__(self, value: object) -> Comparison:  # type: ignore[override]
+    def __eq__(self, value: object) -> Comparison:  # type: ignore[override]  # ty: ignore[invalid-method-override]
         return Comparison(self._name, "=", value)
 
-    def __ne__(self, value: object) -> Comparison:  # type: ignore[override]
+    def __ne__(self, value: object) -> Comparison:  # type: ignore[override]  # ty: ignore[invalid-method-override]
         return Comparison(self._name, "!=", value)
 
     def __gt__(self, value: object) -> Comparison:
