@@ -1,6 +1,6 @@
 [project]
 name = "gcp-observability"
-version = "0.1.0"
+version = "0.2.0"
 description = "Programmatic query builder for Google Cloud Logging filter language"
 readme = "README.md"
 requires-python = ">=3.11"
