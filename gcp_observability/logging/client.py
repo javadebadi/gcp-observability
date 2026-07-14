@@ -26,7 +26,7 @@ class LogEntry:
     log_name: str
     severity: str
     timestamp: datetime
-    payload: Any  # str | dict depending on log type
+    payload: str | dict[str, Any] | None
     payload_type: PayloadType
     resource_type: str
     resource_labels: dict[str, str]  # predefined keys per resource type (e.g. service_name, zone, project_id)
@@ -81,6 +81,7 @@ def _parse_entry(entry: Any) -> LogEntry:
     The isinstance checks below reconstruct the original payload category.
     """
     # Payload
+    payload: str | dict[str, Any] | None
     if hasattr(entry, "payload") and isinstance(entry.payload, dict):
         payload = entry.payload
         payload_type = PayloadType.JSON

@@ -16,7 +16,7 @@ import json
 import sqlite3
 from contextlib import contextmanager
 from datetime import datetime, timezone
-from typing import Generator, Optional
+from typing import Any, Generator, Optional
 
 from ..logging.client import LogEntry
 from ..logging.constants import PayloadType
@@ -305,7 +305,7 @@ def _row_to_entry(row: sqlite3.Row) -> LogEntry:
     payload_type = PayloadType(row["payload_type"])
     if payload_type == PayloadType.JSON and payload_raw:
         try:
-            payload: object = json.loads(payload_raw)
+            payload: str | dict[str, Any] | None = json.loads(payload_raw)
         except json.JSONDecodeError:
             payload = payload_raw
     else:
