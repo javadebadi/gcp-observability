@@ -1,5 +1,5 @@
 from .client import Client, LogEntry
-from .constants import ResourceType, Severity
+from .constants import PayloadType, ResourceType, Severity
 from .expressions import And, Comparison, Expr, F, Field, Not, Or, Raw
 from .query import QueryBuilder
 
@@ -17,4 +17,5 @@ __all__ = [
     "F",
     "Severity",
     "ResourceType",
+    "PayloadType",
 ]

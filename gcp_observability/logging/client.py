@@ -15,6 +15,7 @@ from typing import Any, Iterator, Optional, Union
 
 from google.cloud.logging import Client as _GCPClient
 
+from .constants import PayloadType
 from .query import QueryBuilder
 
 
@@ -26,10 +27,10 @@ class LogEntry:
     severity: str
     timestamp: datetime
     payload: Any  # str | dict depending on log type
-    payload_type: str  # "text" | "json" | "proto"
+    payload_type: PayloadType
     resource_type: str
-    resource_labels: dict[str, str]
-    labels: dict[str, str]
+    resource_labels: dict[str, str]  # predefined keys per resource type (e.g. service_name, zone, project_id)
+    labels: dict[str, str]           # arbitrary entry-level metadata set by the application or GCP service
     insert_id: str
     trace: Optional[str] = None
     span_id: Optional[str] = None
@@ -71,17 +72,24 @@ class LogEntry:
 
 
 def _parse_entry(entry: Any) -> LogEntry:
-    """Convert a raw GCP log entry to a LogEntry."""
+    """Convert a raw GCP log entry to a LogEntry.
+
+    The Cloud Logging REST API exposes three distinct fields — textPayload,
+    jsonPayload, protoPayload — but the google-cloud-logging Python library
+    collapses them into a single ``entry.payload`` attribute whose Python type
+    encodes which kind it is (str → text, dict → json, Message → proto).
+    The isinstance checks below reconstruct the original payload category.
+    """
     # Payload
     if hasattr(entry, "payload") and isinstance(entry.payload, dict):
         payload = entry.payload
-        payload_type = "json"
+        payload_type = PayloadType.JSON
     elif hasattr(entry, "payload") and isinstance(entry.payload, str):
         payload = entry.payload
-        payload_type = "text"
+        payload_type = PayloadType.TEXT
     else:
         payload = str(entry.payload) if hasattr(entry, "payload") else None
-        payload_type = "proto"
+        payload_type = PayloadType.PROTO
 
     # HTTP request
     http_request = None

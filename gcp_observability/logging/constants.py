@@ -1,6 +1,14 @@
-"""Cloud Logging constants: severity levels and resource types."""
+"""Cloud Logging constants: severity levels, resource types, and payload types."""
 
 from __future__ import annotations
+
+from enum import StrEnum
+
+
+class PayloadType(StrEnum):
+    TEXT = "text"
+    JSON = "json"
+    PROTO = "proto"
 
 
 class Severity:

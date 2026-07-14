@@ -19,6 +19,7 @@ from datetime import datetime, timezone
 from typing import Generator, Optional
 
 from ..logging.client import LogEntry
+from ..logging.constants import PayloadType
 
 # Numeric severity levels matching Cloud Logging's own ordering.
 _SEVERITY_LEVEL: dict[str, int] = {
@@ -301,8 +302,8 @@ def _entry_to_row(entry: LogEntry, synced_at: str) -> dict:
 
 def _row_to_entry(row: sqlite3.Row) -> LogEntry:
     payload_raw = row["payload"]
-    payload_type = row["payload_type"]
-    if payload_type == "json" and payload_raw:
+    payload_type = PayloadType(row["payload_type"])
+    if payload_type == PayloadType.JSON and payload_raw:
         try:
             payload: object = json.loads(payload_raw)
         except json.JSONDecodeError:

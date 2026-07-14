@@ -198,10 +198,14 @@ class QueryBuilder:
     # ------------------------------------------------------------------ #
 
     def trace(self, trace_id: str, exact: bool = False) -> QueryBuilder:
+        # trace is stored as "projects/{project}/traces/{hex_id}" so substring
+        # match (exact=False) lets you search with just the hex ID.
         op = "=" if exact else ":"
         return self._add(Comparison("trace", op, trace_id))
 
     def span_id(self, span_id: str) -> QueryBuilder:
+        # span_id is always a fixed 16-char hex string with no path prefix —
+        # partial match has no use, so only exact match is supported.
         return self._add(F("spanId") == span_id)
 
     def sampled(self, value: bool = True) -> QueryBuilder:
