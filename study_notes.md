@@ -98,3 +98,37 @@ propagators.set_global_textmap(CloudTraceFormatPropagator())
 ```
 
 Rule: **always add the GCP propagator when using OTel on GCP**, otherwise Cloud Trace and log entries will have mismatched trace IDs.
+
+---
+
+## Severity levels
+
+Cloud Logging defines 9 named severity levels, each mapped to a numeric value:
+
+| Name | Integer | Meaning |
+|---|---|---|
+| `DEFAULT` | 0 | No severity assigned |
+| `DEBUG` | 100 | Detailed debug info |
+| `INFO` | 200 | Routine operational messages |
+| `NOTICE` | 300 | Normal but significant events |
+| `WARNING` | 400 | Something unexpected, not an error |
+| `ERROR` | 500 | An error occurred |
+| `CRITICAL` | 600 | Severe error, some functionality lost |
+| `ALERT` | 700 | Action must be taken immediately |
+| `EMERGENCY` | 800 | System is unusable |
+
+### Key distinctions
+
+**`DEFAULT` ≠ `DEBUG`** — `DEFAULT` (0) means the entry was written *without specifying any severity*. It sits below DEBUG in the ordering. Many application loggers emit `DEFAULT` if you don't explicitly set a level.
+
+**Gaps are intentional** — Cloud Logging accepts any integer as a severity value, not just the named ones. The named levels use multiples of 100 so there is room for custom levels between them (e.g. 150, 250).
+
+### Why severity is stored as both string and integer
+
+String comparison gives wrong answers for range queries:
+
+```python
+"ERROR" >= "WARNING"  # False — alphabetically E < W, but ERROR > WARNING numerically
+```
+
+`sqlite.py` stores `severity_level` as an integer and indexes it so that queries like `severity_level >= 400` (WARNING and above) are fast and correct. The string is kept alongside it for display.

@@ -266,7 +266,7 @@
 
 <div id="progress-wrap">
   <div id="progress-label">
-    <span id="prog-text">Question 1 of 16</span>
+    <span id="prog-text">Question 1 of 19</span>
     <span id="prog-score">Score: 0</span>
   </div>
   <div id="progress-bar-bg"><div id="progress-bar"></div></div>
@@ -283,7 +283,7 @@
 <div id="results">
   <div id="score-circle">
     <div id="score-number">0</div>
-    <div id="score-total">of 16</div>
+    <div id="score-total">of 19</div>
   </div>
   <div id="score-label"></div>
   <div id="score-sublabel"></div>
@@ -478,6 +478,39 @@ const Q = [
     ],
     answer: 1,
     explanation: "<strong>Correct.</strong> Setting <code>CloudTraceFormatPropagator</code> as the global text-map propagator tells OTel to use GCP's <code>X-Cloud-Trace-Context</code> header format when reading and writing trace context — so the two systems share one trace ID per request."
+  },
+
+  // ── Severity levels ──────────────────────────────────────────────────────────
+  {
+    topic: "Severity levels",
+    q: "What is the correct numeric value for <code>WARNING</code> in Cloud Logging's severity scale?",
+    choices: ["200", "300", "400", "500"],
+    answer: 2,
+    explanation: "<strong>Correct.</strong> The standard mapping is: DEFAULT=0, DEBUG=100, INFO=200, NOTICE=300, WARNING=400, ERROR=500, CRITICAL=600, ALERT=700, EMERGENCY=800."
+  },
+  {
+    topic: "Severity levels",
+    q: "A log entry has severity <code>DEFAULT</code>. What does this mean, and where does it sit in the ordering?",
+    choices: [
+      "It is an alias for DEBUG — the lowest named logging level",
+      "It means no severity was assigned; it sits below DEBUG at numeric value 0",
+      "It means the entry has the default severity for the resource type",
+      "It is the highest severity, used when no other level applies"
+    ],
+    answer: 1,
+    explanation: "<strong>Correct.</strong> <code>DEFAULT</code> (value 0) means the application logged without specifying a severity. It is lower than <code>DEBUG</code> (100) — they are distinct levels, not aliases."
+  },
+  {
+    topic: "Severity levels",
+    q: "Why does <code>SQLiteStore</code> store severity as both a string (<code>severity TEXT</code>) and an integer (<code>severity_level INTEGER</code>) instead of just the string?",
+    choices: [
+      "Strings take more disk space so the integer is stored for compression",
+      "Cloud Logging only returns integers; the string is derived locally",
+      "String comparison gives wrong range results — <code>'ERROR' >= 'WARNING'</code> is False alphabetically, so the integer is used for correct <code>>=</code> queries",
+      "The integer is required by the Cloud Logging REST API for filtering"
+    ],
+    answer: 2,
+    explanation: "<strong>Correct.</strong> Alphabetically <code>'E' &lt; 'W'</code>, so a string <code>&gt;=</code> check on severity would give wrong answers. Storing <code>severity_level</code> as an integer and indexing it makes <code>severity_level &gt;= 400</code> (WARNING and above) both fast and correct."
   }
 ];
 
