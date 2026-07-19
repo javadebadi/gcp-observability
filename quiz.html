@@ -255,6 +255,54 @@
       transition: border-color 0.15s;
     }
     #btn-restart:hover { border-color: var(--accent); }
+
+    /* Start screen */
+    #start-screen {
+      width: 100%;
+      max-width: 640px;
+    }
+    #start-screen h2 { font-size: 1.1rem; font-weight: 700; margin-bottom: 0.3rem; }
+    #start-screen p { color: var(--neutral); font-size: 0.88rem; margin-bottom: 1.2rem; }
+
+    .topic-group { margin-bottom: 1.4rem; }
+    .topic-group-label {
+      font-size: 0.72rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--accent);
+      margin-bottom: 0.55rem;
+    }
+    .q-grid { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+    .q-btn {
+      min-width: 42px;
+      height: 42px;
+      padding: 0 0.6rem;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--surface2);
+      color: var(--text);
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: border-color 0.15s, background 0.15s;
+    }
+    .q-btn:hover { border-color: var(--accent); background: #1a2045; }
+
+    #btn-start-all {
+      width: 100%;
+      margin-top: 0.5rem;
+      padding: 0.8rem;
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.15s;
+    }
+    #btn-start-all:hover { opacity: 0.88; }
   </style>
 </head>
 <body>
@@ -264,7 +312,14 @@
   <p>Based on your <code style="background:#1a1d27;padding:0.1em 0.4em;border-radius:4px;font-size:0.9em;">study_notes.md</code>. Pick the best answer for each question.</p>
 </header>
 
-<div id="progress-wrap">
+<div id="start-screen">
+  <h2>Pick a starting question</h2>
+  <p>Jump straight to a topic, or start all from the beginning.</p>
+  <div id="topic-groups"></div>
+  <button id="btn-start-all">Start all from Q1</button>
+</div>
+
+<div id="progress-wrap" style="display:none">
   <div id="progress-label">
     <span id="prog-text">Question 1 of 19</span>
     <span id="prog-score">Score: 0</span>
@@ -272,7 +327,7 @@
   <div id="progress-bar-bg"><div id="progress-bar"></div></div>
 </div>
 
-<div id="card">
+<div id="card" style="display:none">
   <div class="topic-tag" id="topic-tag">Topic</div>
   <div id="question-text"></div>
   <div class="choices" id="choices"></div>
@@ -515,10 +570,60 @@ const Q = [
 ];
 
 let current = 0;
+let startFrom = 0;
 let score = 0;
 let answered = [];
 
 const LETTERS = ["A", "B", "C", "D"];
+
+// ── Start screen ─────────────────────────────────────────────────────────────
+
+function buildStartScreen() {
+  const groups = {};
+  Q.forEach((q, i) => {
+    if (!groups[q.topic]) groups[q.topic] = [];
+    groups[q.topic].push(i);
+  });
+
+  const container = document.getElementById("topic-groups");
+  container.innerHTML = "";
+  Object.entries(groups).forEach(([topic, indices]) => {
+    const div = document.createElement("div");
+    div.className = "topic-group";
+    div.innerHTML = `<div class="topic-group-label">${topic}</div><div class="q-grid"></div>`;
+    const grid = div.querySelector(".q-grid");
+    indices.forEach(i => {
+      const btn = document.createElement("button");
+      btn.className = "q-btn";
+      btn.textContent = `Q${i + 1}`;
+      btn.title = Q[i].q.replace(/<[^>]+>/g, "").slice(0, 80);
+      btn.addEventListener("click", () => startQuiz(i));
+      grid.appendChild(btn);
+    });
+    container.appendChild(div);
+  });
+}
+
+function showStartScreen() {
+  document.getElementById("start-screen").style.display = "block";
+  document.getElementById("progress-wrap").style.display = "none";
+  document.getElementById("card").style.display = "none";
+  document.getElementById("results").classList.remove("show");
+}
+
+function startQuiz(fromIndex) {
+  current = fromIndex;
+  startFrom = fromIndex;
+  score = 0;
+  answered = [];
+  document.getElementById("start-screen").style.display = "none";
+  document.getElementById("progress-wrap").style.display = "block";
+  document.getElementById("card").style.display = "block";
+  document.getElementById("progress-bar").style.width = "0%";
+  render();
+}
+
+document.getElementById("btn-start-all").addEventListener("click", () => startQuiz(0));
 
 function render() {
   const q = Q[current];
@@ -565,9 +670,11 @@ function selectAnswer(idx) {
 }
 
 function updateProgress() {
-  const total = Q.length;
+  const total = Q.length - startFrom;
   const done = answered.length;
-  document.getElementById("prog-text").textContent = `Question ${current + 1} of ${total}`;
+  const displayCurrent = current - startFrom + 1;
+  const displayTotal = Q.length - startFrom;
+  document.getElementById("prog-text").textContent = `Question ${displayCurrent} of ${displayTotal}`;
   document.getElementById("prog-score").textContent = `Score: ${score}`;
   document.getElementById("progress-bar").style.width = ((done / total) * 100) + "%";
 }
@@ -591,21 +698,22 @@ function scoreMeta(s, total) {
 }
 
 function showResults() {
-  document.getElementById("card").classList.add("hide");
+  document.getElementById("card").style.display = "none";
   document.getElementById("progress-bar").style.width = "100%";
 
   const resultsEl = document.getElementById("results");
   resultsEl.classList.add("show");
 
+  const sessionTotal = Q.length - startFrom;
   document.getElementById("score-number").textContent = score;
-  document.getElementById("score-total").textContent = `of ${Q.length}`;
+  document.getElementById("score-total").textContent = `of ${sessionTotal}`;
 
-  const [label, sublabel] = scoreMeta(score, Q.length);
+  const [label, sublabel] = scoreMeta(score, sessionTotal);
   document.getElementById("score-label").textContent = label;
   document.getElementById("score-sublabel").textContent = sublabel;
 
   // Color the circle based on score
-  const pct = score / Q.length;
+  const pct = score / sessionTotal;
   const circleColor = pct >= 0.85 ? "var(--correct)" : pct >= 0.5 ? "var(--accent)" : "var(--wrong)";
   document.getElementById("score-circle").style.borderColor = circleColor;
   document.getElementById("score-number").style.color = circleColor;
@@ -630,15 +738,9 @@ function showResults() {
 }
 
 document.getElementById("btn-restart").addEventListener("click", () => {
-  current = 0;
-  score = 0;
-  answered = [];
-  document.getElementById("card").classList.remove("hide");
-  document.getElementById("results").classList.remove("show");
-  document.getElementById("progress-bar").style.width = "0%";
   document.getElementById("score-circle").style.borderColor = "var(--accent)";
   document.getElementById("score-number").style.color = "var(--accent)";
-  render();
+  showStartScreen();
 });
 
 // Keyboard navigation
@@ -654,7 +756,8 @@ document.addEventListener("keydown", e => {
   }
 });
 
-render();
+buildStartScreen();
+showStartScreen();
 </script>
 </body>
 </html>
