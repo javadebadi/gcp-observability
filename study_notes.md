@@ -132,3 +132,59 @@ String comparison gives wrong answers for range queries:
 ```
 
 `sqlite.py` stores `severity_level` as an integer and indexes it so that queries like `severity_level >= 400` (WARNING and above) are fast and correct. The string is kept alongside it for display.
+
+---
+
+## Writing logs in a GCP app — best practices
+
+### Three approaches
+
+| Approach | How | When to use |
+|---|---|---|
+| `StructuredLogHandler` | JSON to stdout, no API calls | Large apps, production (recommended) |
+| `CloudLoggingHandler` | Direct API call per log line | Small scripts, writing from outside GCP |
+| Raw `print(json.dumps(...))` | Manual JSON to stdout | Minimal dependencies, one-off tools |
+
+### Why `StructuredLogHandler` is the production default
+
+`CloudLoggingHandler` makes a **synchronous network call** for every `log.warning()`. Under load this adds latency to your request path and can cascade if Cloud Logging is slow. `StructuredLogHandler` writes JSON to stdout — GCP captures it automatically on Cloud Run / GKE with zero network overhead.
+
+```python
+import logging
+from google.cloud.logging.handlers import StructuredLogHandler
+
+logging.basicConfig(handlers=[StructuredLogHandler()], level=logging.INFO)
+log = logging.getLogger(__name__)
+
+log.warning("disk nearly full", extra={"json_fields": {"disk_pct": 92}})
+```
+
+### The flow
+
+```
+log.warning(...)
+    → StructuredLogHandler formats as JSON (severity, trace, labels)
+    → stdout
+    → GCP log capture (automatic on Cloud Run / GKE)
+    → Cloud Logging API
+```
+
+### What large apps add on top
+
+- **One logger per module**: `log = logging.getLogger(__name__)` — gives fine-grained level control per package.
+- **Structured `json_fields`**: add queryable fields like `user_id`, `amount`, `job_id` so you can filter and build log-based metrics without changing app code.
+- **Trace correlation**: `StructuredLogHandler` + OpenTelemetry injects `logging.googleapis.com/trace` automatically so logs link to Cloud Trace spans.
+
+### Severity mapping: Python → GCP
+
+The `google-cloud-logging` library translates Python level names to GCP severity names automatically. The integers are on completely different scales but the names match up:
+
+| Python level | Python int | GCP severity | GCP int |
+|---|---|---|---|
+| `DEBUG` | 10 | `DEBUG` | 100 |
+| `INFO` | 20 | `INFO` | 200 |
+| `WARNING` | 30 | `WARNING` | 400 |
+| `ERROR` | 40 | `ERROR` | 500 |
+| `CRITICAL` | 50 | `CRITICAL` | 600 |
+
+`NOTICE`, `ALERT`, and `EMERGENCY` have no Python stdlib equivalent — you'd have to write to the GCP API directly to use them.

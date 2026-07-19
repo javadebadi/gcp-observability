@@ -321,7 +321,7 @@
 
 <div id="progress-wrap" style="display:none">
   <div id="progress-label">
-    <span id="prog-text">Question 1 of 19</span>
+    <span id="prog-text">Question 1 of 24</span>
     <span id="prog-score">Score: 0</span>
   </div>
   <div id="progress-bar-bg"><div id="progress-bar"></div></div>
@@ -338,7 +338,7 @@
 <div id="results">
   <div id="score-circle">
     <div id="score-number">0</div>
-    <div id="score-total">of 19</div>
+    <div id="score-total">of 24</div>
   </div>
   <div id="score-label"></div>
   <div id="score-sublabel"></div>
@@ -566,6 +566,63 @@ const Q = [
     ],
     answer: 2,
     explanation: "<strong>Correct.</strong> Alphabetically <code>'E' &lt; 'W'</code>, so a string <code>&gt;=</code> check on severity would give wrong answers. Storing <code>severity_level</code> as an integer and indexing it makes <code>severity_level &gt;= 400</code> (WARNING and above) both fast and correct."
+  },
+
+  // ── Writing logs in GCP apps ─────────────────────────────────────────────────
+  {
+    topic: "Writing logs in GCP",
+    q: "You have a high-traffic Cloud Run service. Which logging handler should you use and why?",
+    choices: [
+      "<code>CloudLoggingHandler</code> — it sends logs directly to the API for maximum reliability",
+      "<code>StructuredLogHandler</code> — it writes JSON to stdout so no network call is made per log line",
+      "<code>print()</code> — Cloud Run only supports plain stdout, not structured logging",
+      "<code>CloudLoggingHandler</code> — it batches log lines automatically so there is no latency impact"
+    ],
+    answer: 1,
+    explanation: "<strong>Correct.</strong> <code>StructuredLogHandler</code> writes structured JSON to stdout. GCP captures it automatically with zero network overhead in your request path. <code>CloudLoggingHandler</code> makes a synchronous API call per log line, which adds latency and can cascade under load."
+  },
+  {
+    topic: "Writing logs in GCP",
+    q: "What is the main risk of using <code>CloudLoggingHandler</code> in a high-throughput production service?",
+    choices: [
+      "It formats logs as plain text instead of JSON, losing severity information",
+      "It makes a synchronous network call per log line, adding latency to the request path",
+      "It requires an API key that must be rotated every 30 days",
+      "It does not support severity levels above WARNING"
+    ],
+    answer: 1,
+    explanation: "<strong>Correct.</strong> Every <code>log.warning()</code> becomes a network call. Under load this slows down request handling and can cascade if Cloud Logging has elevated latency."
+  },
+  {
+    topic: "Writing logs in GCP",
+    q: "You log <code>logging.warning('low disk')</code> in Python with <code>StructuredLogHandler</code> attached. What severity does Cloud Logging store this entry as?",
+    choices: ["INFO", "NOTICE", "WARNING", "ERROR"],
+    answer: 2,
+    explanation: "<strong>Correct.</strong> The <code>google-cloud-logging</code> library translates Python level names to GCP severity names. Python <code>WARNING</code> maps to GCP <code>WARNING</code> (integer 400)."
+  },
+  {
+    topic: "Writing logs in GCP",
+    q: "Which GCP severity levels are impossible to emit using only Python's standard <code>logging</code> module?",
+    choices: [
+      "DEBUG and INFO",
+      "WARNING and ERROR",
+      "NOTICE, ALERT, and EMERGENCY",
+      "CRITICAL and DEFAULT"
+    ],
+    answer: 2,
+    explanation: "<strong>Correct.</strong> Python's stdlib defines DEBUG, INFO, WARNING, ERROR, and CRITICAL. GCP's NOTICE (300), ALERT (700), and EMERGENCY (800) have no Python equivalent — you'd have to call the Cloud Logging API directly to emit them."
+  },
+  {
+    topic: "Writing logs in GCP",
+    q: "What is the purpose of adding <code>extra={\"json_fields\": {\"user_id\": uid}}</code> to a log call?",
+    choices: [
+      "It sets the severity of the log entry to the value of <code>uid</code>",
+      "It embeds queryable structured fields in the <code>jsonPayload</code> so you can filter and build log-based metrics without changing app code",
+      "It is required by <code>StructuredLogHandler</code> to output valid JSON",
+      "It attaches the user ID as a resource label on the log entry"
+    ],
+    answer: 1,
+    explanation: "<strong>Correct.</strong> <code>json_fields</code> are merged into the entry's <code>jsonPayload</code>. This lets you filter logs by <code>user_id</code> in the Cloud Logging console and define log-based metrics on those fields — all without touching the log message string."
   }
 ];
 
