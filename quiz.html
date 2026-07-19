@@ -1,0 +1,627 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GCP Cloud Logging — Study Quiz</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0f1117;
+      --surface: #1a1d27;
+      --surface2: #22263a;
+      --border: #2e3250;
+      --accent: #6c8ef5;
+      --accent-dim: #3b4a8a;
+      --correct: #34d399;
+      --correct-bg: #0d2e22;
+      --wrong: #f87171;
+      --wrong-bg: #2e1212;
+      --neutral: #8892b0;
+      --text: #cdd6f4;
+      --text-dim: #6c7a9c;
+      --tag-bg: #1e2440;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 2rem 1rem 4rem;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 2.5rem;
+      max-width: 640px;
+    }
+    header h1 { font-size: 1.6rem; font-weight: 700; margin-bottom: 0.4rem; }
+    header p { color: var(--neutral); font-size: 0.92rem; }
+
+    /* Progress */
+    #progress-wrap {
+      width: 100%;
+      max-width: 640px;
+      margin-bottom: 1.5rem;
+    }
+    #progress-label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.82rem;
+      color: var(--text-dim);
+      margin-bottom: 0.4rem;
+    }
+    #progress-bar-bg {
+      width: 100%;
+      height: 5px;
+      background: var(--border);
+      border-radius: 99px;
+      overflow: hidden;
+    }
+    #progress-bar {
+      height: 100%;
+      background: var(--accent);
+      border-radius: 99px;
+      transition: width 0.35s ease;
+      width: 0%;
+    }
+
+    /* Card */
+    #card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 2rem;
+      width: 100%;
+      max-width: 640px;
+    }
+
+    .topic-tag {
+      display: inline-block;
+      font-size: 0.72rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      padding: 0.2rem 0.6rem;
+      border-radius: 99px;
+      background: var(--tag-bg);
+      color: var(--accent);
+      border: 1px solid var(--accent-dim);
+      margin-bottom: 1rem;
+    }
+
+    #question-text {
+      font-size: 1.05rem;
+      line-height: 1.6;
+      margin-bottom: 1.5rem;
+    }
+
+    #question-text code {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      padding: 0.1em 0.35em;
+      border-radius: 4px;
+      font-size: 0.9em;
+      font-family: "SF Mono", "Fira Code", monospace;
+      color: #a9d4ff;
+    }
+
+    .choices { display: flex; flex-direction: column; gap: 0.65rem; }
+
+    .choice {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.75rem;
+      padding: 0.85rem 1rem;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: var(--surface2);
+      cursor: pointer;
+      transition: border-color 0.15s, background 0.15s;
+      text-align: left;
+    }
+    .choice:hover:not(.locked) { border-color: var(--accent); }
+
+    .choice-letter {
+      flex-shrink: 0;
+      width: 24px;
+      height: 24px;
+      border-radius: 6px;
+      background: var(--tag-bg);
+      border: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: var(--text-dim);
+      transition: background 0.15s, color 0.15s;
+    }
+
+    .choice-text { font-size: 0.93rem; line-height: 1.5; padding-top: 2px; }
+
+    .choice.selected { border-color: var(--accent); background: #1a2045; }
+    .choice.selected .choice-letter { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+    .choice.correct { border-color: var(--correct); background: var(--correct-bg); }
+    .choice.correct .choice-letter { background: var(--correct); color: #fff; border-color: var(--correct); }
+
+    .choice.wrong { border-color: var(--wrong); background: var(--wrong-bg); }
+    .choice.wrong .choice-letter { background: var(--wrong); color: #fff; border-color: var(--wrong); }
+
+    .choice.locked { cursor: default; }
+
+    /* Explanation */
+    #explanation {
+      display: none;
+      margin-top: 1.2rem;
+      padding: 1rem 1.1rem;
+      border-radius: 10px;
+      font-size: 0.88rem;
+      line-height: 1.6;
+      border-left: 3px solid var(--correct);
+    }
+    #explanation.show { display: block; }
+    #explanation.correct-exp { background: var(--correct-bg); border-color: var(--correct); }
+    #explanation.wrong-exp { background: var(--wrong-bg); border-color: var(--wrong); }
+    #explanation strong { color: var(--text); }
+    #explanation code {
+      background: rgba(255,255,255,0.07);
+      padding: 0.1em 0.3em;
+      border-radius: 4px;
+      font-size: 0.88em;
+      font-family: "SF Mono", "Fira Code", monospace;
+    }
+
+    /* Buttons */
+    #btn-next {
+      display: none;
+      margin-top: 1.5rem;
+      width: 100%;
+      padding: 0.8rem;
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.15s;
+    }
+    #btn-next:hover { opacity: 0.88; }
+    #btn-next.show { display: block; }
+
+    /* Results screen */
+    #results {
+      display: none;
+      text-align: center;
+      width: 100%;
+      max-width: 640px;
+    }
+    #results.show { display: block; }
+    #card.hide { display: none; }
+
+    #score-circle {
+      width: 120px;
+      height: 120px;
+      border-radius: 50%;
+      border: 5px solid var(--accent);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 1.5rem;
+    }
+    #score-number { font-size: 2rem; font-weight: 800; color: var(--accent); }
+    #score-total { font-size: 0.78rem; color: var(--text-dim); margin-top: 2px; }
+    #score-label { font-size: 1.3rem; font-weight: 700; margin-bottom: 0.4rem; }
+    #score-sublabel { color: var(--neutral); font-size: 0.9rem; margin-bottom: 2rem; }
+
+    .review-item {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1rem 1.1rem;
+      margin-bottom: 0.75rem;
+      text-align: left;
+    }
+    .review-item .r-header {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      margin-bottom: 0.5rem;
+    }
+    .r-icon { font-size: 1rem; }
+    .r-q { font-size: 0.88rem; color: var(--text); font-weight: 500; }
+    .r-answer { font-size: 0.82rem; color: var(--text-dim); line-height: 1.5; }
+    .r-answer span.good { color: var(--correct); }
+    .r-answer span.bad { color: var(--wrong); }
+
+    #btn-restart {
+      margin-top: 1.5rem;
+      padding: 0.8rem 2rem;
+      background: var(--surface2);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: border-color 0.15s;
+    }
+    #btn-restart:hover { border-color: var(--accent); }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>GCP Cloud Logging — Quiz</h1>
+  <p>Based on your <code style="background:#1a1d27;padding:0.1em 0.4em;border-radius:4px;font-size:0.9em;">study_notes.md</code>. Pick the best answer for each question.</p>
+</header>
+
+<div id="progress-wrap">
+  <div id="progress-label">
+    <span id="prog-text">Question 1 of 16</span>
+    <span id="prog-score">Score: 0</span>
+  </div>
+  <div id="progress-bar-bg"><div id="progress-bar"></div></div>
+</div>
+
+<div id="card">
+  <div class="topic-tag" id="topic-tag">Topic</div>
+  <div id="question-text"></div>
+  <div class="choices" id="choices"></div>
+  <div id="explanation"></div>
+  <button id="btn-next">Next question →</button>
+</div>
+
+<div id="results">
+  <div id="score-circle">
+    <div id="score-number">0</div>
+    <div id="score-total">of 16</div>
+  </div>
+  <div id="score-label"></div>
+  <div id="score-sublabel"></div>
+  <div id="review-list"></div>
+  <button id="btn-restart">Restart quiz</button>
+</div>
+
+<script>
+const Q = [
+  // ── Payload types ───────────────────────────────────────────────────────────
+  {
+    topic: "Payload types",
+    q: "You call <code>entry.payload</code> on a Python <code>google-cloud-logging</code> log entry and get back a <code>dict</code>. What is the original Cloud Logging field?",
+    choices: ["textPayload", "jsonPayload", "protoPayload", "structPayload"],
+    answer: 1,
+    explanation: "<strong>Correct.</strong> The Python library maps payload types to Python types: <code>str</code> → <code>textPayload</code>, <code>dict</code> → <code>jsonPayload</code>, <code>google.protobuf.message.Message</code> → <code>protoPayload</code>. There is no <code>structPayload</code>."
+  },
+  {
+    topic: "Payload types",
+    q: "You get <code>entry.payload</code> back as a plain Python <code>str</code>. What does this mean?",
+    choices: [
+      "The entry is a jsonPayload serialised to a string",
+      "The entry is a textPayload — an unstructured log line",
+      "The entry is a protoPayload decoded to text",
+      "The entry has no payload"
+    ],
+    answer: 1,
+    explanation: "<strong>Correct.</strong> <code>str</code> → <code>textPayload</code>: the application logged a plain, unstructured string."
+  },
+  {
+    topic: "Payload types",
+    q: "Which payload type is emitted exclusively by GCP-managed services (e.g. Cloud Audit Logs, VPC flow logs) — never by your own application code?",
+    choices: ["textPayload", "jsonPayload", "protoPayload", "binaryPayload"],
+    answer: 2,
+    explanation: "<strong>Correct.</strong> <code>protoPayload</code> is a Protocol Buffer message produced by GCP services themselves. Your app only writes <code>textPayload</code> or <code>jsonPayload</code>."
+  },
+  {
+    topic: "Payload types",
+    q: "Why does <code>_parse_entry</code> in this library use <code>isinstance</code> checks instead of accessing <code>entry.textPayload</code> / <code>entry.jsonPayload</code> directly?",
+    choices: [
+      "Because the REST API field names contain illegal Python characters",
+      "Because the Python library collapses all three payload types into a single <code>entry.payload</code> attribute",
+      "Because <code>isinstance</code> is faster than attribute access",
+      "Because Cloud Logging does not always populate the payload type field"
+    ],
+    answer: 1,
+    explanation: "<strong>Correct.</strong> The <code>google-cloud-logging</code> Python client exposes one unified <code>.payload</code> attribute. You use <code>isinstance(entry.payload, str)</code>, <code>dict</code>, or <code>Message</code> to distinguish the three original REST fields."
+  },
+
+  // ── resource_labels vs labels ────────────────────────────────────────────────
+  {
+    topic: "resource_labels vs labels",
+    q: "A Cloud Run log entry has <code>resource_labels = {\"service_name\": \"api\", \"location\": \"us-central1\"}</code>. What do these keys tell you?",
+    choices: [
+      "Arbitrary metadata the application chose to attach",
+      "Which specific Cloud Run service and region emitted this log",
+      "The severity and log name of the entry",
+      "Custom labels injected by infrastructure pipelines"
+    ],
+    answer: 1,
+    explanation: "<strong>Correct.</strong> <code>resource_labels</code> are predefined by Google per resource type and identify the specific resource instance — in this case which Cloud Run service in which region."
+  },
+  {
+    topic: "resource_labels vs labels",
+    q: "What is the correct Python type for both <code>resource_labels</code> and <code>labels</code> on a log entry?",
+    choices: ["list[str]", "dict[str, str]", "dict[str, Any]", "str"],
+    answer: 1,
+    explanation: "<strong>Correct.</strong> Both are <code>dict[str, str]</code> — all keys and values are strings."
+  },
+  {
+    topic: "resource_labels vs labels",
+    q: "Your platform team wants to tag every log entry with <code>environment=production</code> and <code>app_version=1.4.2</code> without modifying application payload code. Which field do they use?",
+    choices: ["resource_labels", "labels", "jsonPayload", "protoPayload"],
+    answer: 1,
+    explanation: "<strong>Correct.</strong> <code>labels</code> are arbitrary key-value metadata that can be injected by infrastructure or middleware without touching the application payload. That's one reason they're not redundant with <code>jsonPayload</code>."
+  },
+  {
+    topic: "resource_labels vs labels",
+    q: "Which of the following is NOT a reason why <code>labels</code> are useful even when you already use <code>jsonPayload</code>?",
+    choices: [
+      "Labels work across all payload types (text, json, proto)",
+      "Infrastructure can inject labels without touching the application payload",
+      "Labels increase log ingestion throughput by compressing payload size",
+      "Labels separate operational metadata from business domain data"
+    ],
+    answer: 2,
+    explanation: "<strong>Correct — that is NOT a real reason.</strong> The three valid reasons are: (1) labels work across all payload types, (2) infrastructure can inject them without touching the app, (3) they keep operational metadata separate from business data."
+  },
+
+  // ── trace and span_id ────────────────────────────────────────────────────────
+  {
+    topic: "Trace & Span",
+    q: "A single user request touches a load balancer, Service A, and Service B. How many distinct <code>trace</code> IDs appear on all log entries produced by this request?",
+    choices: ["3 — one per service", "2 — one per service-to-service hop", "1 — one trace for the entire end-to-end request", "It depends on which service creates the first span"],
+    answer: 2,
+    explanation: "<strong>Correct.</strong> A trace ID represents the entire end-to-end journey of one request. Every log entry from every service that handles that request shares the same trace ID. Individual services each get their own <em>span IDs</em>."
+  },
+  {
+    topic: "Trace & Span",
+    q: "What is a <em>span</em> in the context of distributed tracing?",
+    choices: [
+      "A synonym for the trace — the full request journey",
+      "A single unit of work within a trace (e.g. one function call, one DB query)",
+      "A 16-character hex identifier unique to a service",
+      "A log entry that contains both trace and span information"
+    ],
+    answer: 1,
+    explanation: "<strong>Correct.</strong> A span is one unit of work inside a trace. One trace is composed of many spans — e.g. LB receives request (span 1), Service A processes (span 2), Service A calls DB (span 3), etc."
+  },
+  {
+    topic: "Trace & Span",
+    q: "In Cloud Logging, a <code>trace</code> value is stored as a full path like <code>projects/my-proj/traces/abc123</code>. What does this mean for <code>QueryBuilder.trace()</code>?",
+    choices: [
+      "It must always use exact match because the full path is always known",
+      "It defaults to substring match (<code>:</code> operator) so you can search by just the short hex ID",
+      "It requires a regex because the path separator changes by region",
+      "It stores only the hex portion, so substring match is never needed"
+    ],
+    answer: 1,
+    explanation: "<strong>Correct.</strong> Because the trace value includes the full <code>projects/.../traces/</code> path prefix, when you only have the short hex ID you need a substring (<code>:</code>) match to find it. That's why <code>QueryBuilder.trace()</code> defaults to <code>exact=False</code>."
+  },
+  {
+    topic: "Trace & Span",
+    q: "Why does <code>QueryBuilder.span_id()</code> only support exact match, unlike <code>trace()</code> which defaults to substring match?",
+    choices: [
+      "span_id is longer than trace and substring search would be too slow",
+      "span_id is always a fixed 16-character hex string with no path prefix — partial match has no practical use",
+      "Cloud Logging does not index span_id so substring search is unsupported",
+      "span_id values are encrypted and cannot be partially matched"
+    ],
+    answer: 1,
+    explanation: "<strong>Correct.</strong> <code>span_id</code> is always a fixed 16-character hex string. There's no path prefix to strip, so you always have the full value — making substring match unnecessary."
+  },
+  {
+    topic: "Trace & Span",
+    q: "Which actor automatically creates trace and span at the HTTP request level on GCP?",
+    choices: [
+      "Your application code via OpenTelemetry",
+      "GCP managed services (Cloud Run, App Engine, GKE)",
+      "The Cloud Logging agent running on each VM",
+      "The google-cloud-logging Python SDK"
+    ],
+    answer: 1,
+    explanation: "<strong>Correct.</strong> GCP (Cloud Run, App Engine, GKE) automatically creates trace + span at the HTTP request level. OpenTelemetry creates spans for <em>operations inside</em> your service (functions, DB calls, etc.)."
+  },
+
+  // ── OpenTelemetry on GCP ─────────────────────────────────────────────────────
+  {
+    topic: "OpenTelemetry on GCP",
+    q: "You deploy a Python service to Cloud Run with OpenTelemetry but do NOT add any GCP propagator. What goes wrong?",
+    choices: [
+      "OTel spans are never created because Cloud Run blocks the SDK",
+      "GCP uses <code>X-Cloud-Trace-Context</code> and OTel uses W3C <code>traceparent</code> — without bridging you get two separate trace IDs for the same request",
+      "Log entries lose their severity level because OTel overwrites it",
+      "Nothing — GCP auto-detects OTel and bridges the headers automatically"
+    ],
+    answer: 1,
+    explanation: "<strong>Correct.</strong> The two systems use different HTTP headers for trace context propagation. Without a bridge you end up with two unrelated trace IDs for the same request — Cloud Trace and your log entries won't correlate."
+  },
+  {
+    topic: "OpenTelemetry on GCP",
+    q: "Which Python package bridges GCP's native trace header and OpenTelemetry's W3C <code>traceparent</code> header?",
+    choices: [
+      "opentelemetry-sdk-gcp",
+      "google-cloud-trace",
+      "opentelemetry-propagator-gcp",
+      "grpc-google-cloud-logging"
+    ],
+    answer: 2,
+    explanation: "<strong>Correct.</strong> <code>opentelemetry-propagator-gcp</code> provides <code>CloudTraceFormatPropagator</code>, which you set as the global propagator to unify the two header formats."
+  },
+  {
+    topic: "OpenTelemetry on GCP",
+    q: "In an OpenTelemetry setup across multiple services, which service creates the trace ID and what do downstream services do with it?",
+    choices: [
+      "Each service creates its own trace ID; a gateway merges them later",
+      "The first service in the chain creates the trace ID; every downstream service propagates (reuses) that same ID",
+      "GCP assigns a trace ID after all services finish and log entries are ingested",
+      "The last service creates the trace ID and backfills earlier log entries"
+    ],
+    answer: 1,
+    explanation: "<strong>Correct.</strong> OpenTelemetry creates the trace ID at the first (entry) service. Every downstream service reads it from the incoming request headers and propagates it unchanged — this is what keeps all log entries for one request under a single trace."
+  },
+  {
+    topic: "OpenTelemetry on GCP",
+    q: "After adding <code>opentelemetry-propagator-gcp</code>, you call the following. What does this line do?\n<code>propagators.set_global_textmap(CloudTraceFormatPropagator())</code>",
+    choices: [
+      "Enables OTel to write logs to Cloud Logging automatically",
+      "Registers the GCP propagator so OTel reads/writes X-Cloud-Trace-Context headers instead of traceparent",
+      "Disables the W3C traceparent header entirely in favor of GCP's format",
+      "Creates a new trace ID for every outgoing HTTP request"
+    ],
+    answer: 1,
+    explanation: "<strong>Correct.</strong> Setting <code>CloudTraceFormatPropagator</code> as the global text-map propagator tells OTel to use GCP's <code>X-Cloud-Trace-Context</code> header format when reading and writing trace context — so the two systems share one trace ID per request."
+  }
+];
+
+let current = 0;
+let score = 0;
+let answered = [];
+
+const LETTERS = ["A", "B", "C", "D"];
+
+function render() {
+  const q = Q[current];
+  document.getElementById("topic-tag").textContent = q.topic;
+  document.getElementById("question-text").innerHTML = q.q;
+
+  const choicesEl = document.getElementById("choices");
+  choicesEl.innerHTML = "";
+  q.choices.forEach((text, i) => {
+    const btn = document.createElement("button");
+    btn.className = "choice";
+    btn.innerHTML = `<span class="choice-letter">${LETTERS[i]}</span><span class="choice-text">${text}</span>`;
+    btn.addEventListener("click", () => selectAnswer(i));
+    choicesEl.appendChild(btn);
+  });
+
+  document.getElementById("explanation").className = "";
+  document.getElementById("explanation").textContent = "";
+  document.getElementById("btn-next").className = "";
+
+  updateProgress();
+}
+
+function selectAnswer(idx) {
+  const q = Q[current];
+  const choices = document.querySelectorAll(".choice");
+
+  choices.forEach(c => c.classList.add("locked"));
+
+  const isCorrect = idx === q.answer;
+  if (isCorrect) score++;
+
+  choices[idx].classList.add(isCorrect ? "correct" : "wrong");
+  if (!isCorrect) choices[q.answer].classList.add("correct");
+
+  const expEl = document.getElementById("explanation");
+  expEl.innerHTML = q.explanation;
+  expEl.className = "show " + (isCorrect ? "correct-exp" : "wrong-exp");
+
+  document.getElementById("btn-next").className = "show";
+
+  answered.push({ q: q.q, chosen: idx, correct: q.answer, ok: isCorrect, choices: q.choices });
+  updateProgress();
+}
+
+function updateProgress() {
+  const total = Q.length;
+  const done = answered.length;
+  document.getElementById("prog-text").textContent = `Question ${current + 1} of ${total}`;
+  document.getElementById("prog-score").textContent = `Score: ${score}`;
+  document.getElementById("progress-bar").style.width = ((done / total) * 100) + "%";
+}
+
+document.getElementById("btn-next").addEventListener("click", () => {
+  current++;
+  if (current >= Q.length) {
+    showResults();
+  } else {
+    render();
+  }
+});
+
+function scoreMeta(s, total) {
+  const pct = s / total;
+  if (pct === 1)   return ["Perfect score!", "You nailed every question."];
+  if (pct >= 0.85) return ["Excellent!", "Just a couple of things to review."];
+  if (pct >= 0.70) return ["Good work!", "A few areas worth revisiting."];
+  if (pct >= 0.50) return ["Halfway there!", "Review the explanations and try again."];
+  return ["Keep studying!", "Go back over your study notes and retake the quiz."];
+}
+
+function showResults() {
+  document.getElementById("card").classList.add("hide");
+  document.getElementById("progress-bar").style.width = "100%";
+
+  const resultsEl = document.getElementById("results");
+  resultsEl.classList.add("show");
+
+  document.getElementById("score-number").textContent = score;
+  document.getElementById("score-total").textContent = `of ${Q.length}`;
+
+  const [label, sublabel] = scoreMeta(score, Q.length);
+  document.getElementById("score-label").textContent = label;
+  document.getElementById("score-sublabel").textContent = sublabel;
+
+  // Color the circle based on score
+  const pct = score / Q.length;
+  const circleColor = pct >= 0.85 ? "var(--correct)" : pct >= 0.5 ? "var(--accent)" : "var(--wrong)";
+  document.getElementById("score-circle").style.borderColor = circleColor;
+  document.getElementById("score-number").style.color = circleColor;
+
+  const reviewList = document.getElementById("review-list");
+  reviewList.innerHTML = "";
+  answered.forEach((a, i) => {
+    const item = document.createElement("div");
+    item.className = "review-item";
+    const icon = a.ok ? "✅" : "❌";
+    const yourAnswer = `<span class="${a.ok ? 'good' : 'bad'}">${LETTERS[a.chosen]}. ${a.choices[a.chosen]}</span>`;
+    const correctLine = a.ok ? "" : `<br>Correct: <span class="good">${LETTERS[a.correct]}. ${a.choices[a.correct]}</span>`;
+    item.innerHTML = `
+      <div class="r-header">
+        <span class="r-icon">${icon}</span>
+        <span class="r-q">Q${i + 1}: ${a.q}</span>
+      </div>
+      <div class="r-answer">Your answer: ${yourAnswer}${correctLine}</div>
+    `;
+    reviewList.appendChild(item);
+  });
+}
+
+document.getElementById("btn-restart").addEventListener("click", () => {
+  current = 0;
+  score = 0;
+  answered = [];
+  document.getElementById("card").classList.remove("hide");
+  document.getElementById("results").classList.remove("show");
+  document.getElementById("progress-bar").style.width = "0%";
+  document.getElementById("score-circle").style.borderColor = "var(--accent)";
+  document.getElementById("score-number").style.color = "var(--accent)";
+  render();
+});
+
+// Keyboard navigation
+document.addEventListener("keydown", e => {
+  if (["1","2","3","4"].includes(e.key)) {
+    const choices = document.querySelectorAll(".choice:not(.locked)");
+    const idx = parseInt(e.key) - 1;
+    if (choices[idx]) choices[idx].click();
+  }
+  if (e.key === "Enter") {
+    const btn = document.getElementById("btn-next");
+    if (btn.classList.contains("show")) btn.click();
+  }
+});
+
+render();
+</script>
+</body>
+</html>
