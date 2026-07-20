@@ -321,7 +321,7 @@
 
 <div id="progress-wrap" style="display:none">
   <div id="progress-label">
-    <span id="prog-text">Question 1 of 24</span>
+    <span id="prog-text">Question 1 of 29</span>
     <span id="prog-score">Score: 0</span>
   </div>
   <div id="progress-bar-bg"><div id="progress-bar"></div></div>
@@ -338,7 +338,7 @@
 <div id="results">
   <div id="score-circle">
     <div id="score-number">0</div>
-    <div id="score-total">of 24</div>
+    <div id="score-total">of 29</div>
   </div>
   <div id="score-label"></div>
   <div id="score-sublabel"></div>
@@ -623,6 +623,56 @@ const Q = [
     ],
     answer: 1,
     explanation: "<strong>Correct.</strong> <code>json_fields</code> are merged into the entry's <code>jsonPayload</code>. This lets you filter logs by <code>user_id</code> in the Cloud Logging console and define log-based metrics on those fields — all without touching the log message string."
+  },
+
+  // ── Log filter language ──────────────────────────────────────────────────────
+  {
+    topic: "Log filter language",
+    q: "You write the filter <code>textPayload:\"timeout\"</code>. What does the <code>:</code> operator do here?",
+    choices: [
+      "Checks if textPayload equals the string \"timeout\" exactly",
+      "Checks if textPayload contains the substring \"timeout\" (case-insensitive)",
+      "Checks if textPayload starts with \"timeout\"",
+      "Checks if the textPayload field exists on the entry"
+    ],
+    answer: 1,
+    explanation: "<strong>Correct.</strong> On a string field, <code>:</code> is a substring / has-check. <code>textPayload:\"timeout\"</code> returns entries whose text payload contains \"timeout\" anywhere, case-insensitively. For exact equality you'd use <code>=</code>."
+  },
+  {
+    topic: "Log filter language",
+    q: "How does Cloud Logging treat two filter expressions separated by a newline character?",
+    choices: [
+      "OR — either expression can match",
+      "The second expression overrides the first",
+      "AND — both expressions must match",
+      "It is a syntax error; you must use the explicit AND keyword"
+    ],
+    answer: 2,
+    explanation: "<strong>Correct.</strong> A bare newline (or a space) between two expressions is implicit AND — both must match. <code>QueryBuilder</code> joins filter lines with <code>\\n</code> to match this exactly, which is also what the Cloud Logging console generates."
+  },
+  {
+    topic: "Log filter language",
+    q: "You want to find all log entries where <code>severity</code> is WARNING or higher using the Cloud Logging filter language. Which filter is correct?",
+    choices: [
+      "<code>severity_level >= 400</code>",
+      "<code>severity >= \"WARNING\"</code>",
+      "<code>severity >= WARNING</code>",
+      "<code>severity IN [\"WARNING\",\"ERROR\",\"CRITICAL\",\"ALERT\",\"EMERGENCY\"]</code>"
+    ],
+    answer: 2,
+    explanation: "<strong>Correct.</strong> The Cloud Logging filter language has built-in knowledge of severity ordering, so <code>severity >= WARNING</code> works with the bare name (no quotes needed). GCP resolves it to numeric value 400 and returns all entries at WARNING and above. This is unlike SQLite where you need <code>severity_level >= 400</code> because string comparison gives wrong alphabetical results."
+  },
+  {
+    topic: "Log filter language",
+    q: "Why does <code>expressions.py</code> expose a <code>.has()</code> method on <code>Field</code> instead of overloading a Python operator for the Cloud Logging <code>:</code> operator?",
+    choices: [
+      "Python's <code>:</code> is used in slice syntax and cannot be overloaded",
+      "The <code>:</code> operator is only available in Cloud Logging's REST API, not the Python SDK",
+      "<code>.has()</code> is faster than operator overloading for large log sets",
+      "The Cloud Logging <code>:</code> operator is deprecated in favour of <code>=~</code>"
+    ],
+    answer: 0,
+    explanation: "<strong>Correct.</strong> Python uses <code>:</code> for dict literals, slices, and type annotations — it is not a valid operator to overload on a class. So the library exposes <code>.has()</code> as a named method that emits the <code>:</code> substring/has syntax in the resulting filter string."
   }
 ];
 

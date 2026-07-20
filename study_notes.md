@@ -188,3 +188,97 @@ The `google-cloud-logging` library translates Python level names to GCP severity
 | `CRITICAL` | 50 | `CRITICAL` | 600 |
 
 `NOTICE`, `ALERT`, and `EMERGENCY` have no Python stdlib equivalent — you'd have to write to the GCP API directly to use them.
+
+---
+
+## Log filter language
+
+The filter language is accepted everywhere Cloud Logging takes a filter — the console, the API's `filter` parameter, log sinks, and log-based alerts. It is also exactly what `QueryBuilder.build()` outputs.
+
+### Operators
+
+| Operator | Name | Example | Meaning |
+|---|---|---|---|
+| `=` | exact | `severity="ERROR"` | field equals value exactly |
+| `!=` | not equal | `severity!="DEBUG"` | field does not equal value |
+| `>` `>=` `<` `<=` | comparison | `severity>=WARNING` | ordered comparison |
+| `:` | has / substring | `textPayload:"timeout"` | field contains this string |
+| `=~` | regex match | `textPayload=~"error.*disk"` | matches RE2 regex |
+| `!~` | regex not-match | `textPayload!~"healthcheck"` | does not match regex |
+
+The `:` operator has nuance:
+- On a **string field**: true if the value *contains* the substring (case-insensitive)
+- On a **message / repeated field**: true if the field exists and holds the value ("has" check)
+- `field:*` — field has any value at all (existence check)
+
+### Combining expressions
+
+| Syntax | Meaning |
+|---|---|
+| `expr1\nexpr2` (newline) | implicit AND |
+| `expr1 expr2` (space) | also implicit AND |
+| `expr1 AND expr2` | explicit AND |
+| `expr1 OR expr2` | OR |
+| `NOT expr` | negation |
+| `(expr1 OR expr2) AND expr3` | grouping |
+
+**Why `QueryBuilder` uses newlines:** The Cloud Logging console generates filters with newlines between terms. The library matches this so filters copy-paste between the console and the library without modification.
+
+### Field paths
+
+Fields are accessed with dot notation:
+
+```
+# Top-level
+severity >= WARNING
+resource.type = "cloud_run_revision"
+logName : "projects/my-proj/logs/my-app"
+
+# Into jsonPayload
+jsonPayload.user_id = "abc-123"
+jsonPayload.amount > 1000
+
+# Into labels
+labels.environment = "production"
+
+# Into resource labels
+resource.labels.service_name = "api"
+```
+
+### Severity comparison in filter language vs SQLite
+
+In the Cloud Logging filter language, GCP knows the severity ordering by name:
+
+```
+severity >= WARNING   ← valid; GCP resolves WARNING → 400 internally
+```
+
+This works because the filter language has built-in knowledge of severity ordering. In SQLite, string comparison gives wrong results (`'ERROR' >= 'WARNING'` is `False` alphabetically), which is why `SQLiteStore` stores `severity_level` as an integer.
+
+### Important built-in fields
+
+| Field | Notes |
+|---|---|
+| `logName` | Full path: `projects/{p}/logs/{log_id}` |
+| `resource.type` | e.g. `"cloud_run_revision"`, `"gce_instance"` |
+| `resource.labels.*` | Per resource type |
+| `severity` | Compared by name using GCP's numeric ordering |
+| `timestamp` | RFC 3339: `"2024-01-15T10:00:00Z"` |
+| `insertId` | Dedup key |
+| `trace` | Full path: `projects/{p}/traces/{hex}` |
+| `spanId` | 16-char hex |
+| `labels.*` | Application/infrastructure labels |
+| `textPayload` | Unstructured log text |
+| `jsonPayload.*` | Structured JSON fields |
+
+### How `expressions.py` maps to the filter language
+
+`F()` / `Field` overloads Python operators to produce filter strings:
+
+```python
+F("severity") >= "WARNING"       # → severity >= "WARNING"
+F("jsonPayload.user_id") == "x"  # → jsonPayload.user_id = "x"
+F("textPayload").has("timeout")  # → textPayload:"timeout"
+```
+
+`.has()` exists because Python has no `:` operator to overload — it mirrors the Cloud Logging `:` semantics directly.
