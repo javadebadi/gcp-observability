@@ -682,6 +682,56 @@ const Q = [
     ],
     answer: 0,
     explanation: "<strong>Correct.</strong> Python uses <code>:</code> for dict literals, slices, and type annotations — it is not a valid operator to overload on a class. So the library exposes <code>.has()</code> as a named method that emits the <code>:</code> substring/has syntax in the resulting filter string."
+  },
+
+  // ── Log-based metrics & alerting ───────────────────────────────────────────────
+  {
+    topic: "Log-based metrics & alerting",
+    q: "You want to track request latency as a histogram, extracting the numeric value from <code>jsonPayload.latency_ms</code> on each matching log entry. Which metric type do you create?",
+    choices: [
+      "Counter metric",
+      "Distribution metric",
+      "System-defined metric",
+      "A log sink with a BigQuery destination"
+    ],
+    answer: 1,
+    explanation: "<strong>Correct.</strong> A distribution metric buckets a numeric value pulled from each matching entry into a histogram — exactly what you want for latency. A counter metric only counts how many entries matched; it has no concept of an extracted value."
+  },
+  {
+    topic: "Log-based metrics & alerting",
+    q: "You create a log-based metric today with the filter <code>severity>=ERROR</code>. Can it show you a count of ERROR logs from last month?",
+    choices: [
+      "Yes, log-based metrics recompute over the full retention window automatically",
+      "Yes, but only if Log Analytics is enabled on the bucket",
+      "No — the metric only counts entries ingested after it was created",
+      "No — log-based metrics can only ever show the last 24 hours"
+    ],
+    answer: 2,
+    explanation: "<strong>Correct.</strong> Log-based metrics are not retroactive. They're computed from the live ingest stream going forward, so a metric created today has no data for periods before it existed. To analyze historical logs you'd query the log bucket (or Log Analytics) directly, not a log-based metric."
+  },
+  {
+    topic: "Log-based metrics & alerting",
+    q: "You add an exclusion filter to the <code>_Default</code> sink so a noisy, high-volume log stops being stored (saving cost). You also have a log-based metric counting <code>severity>=ERROR</code> entries from that same source. What happens to the metric?",
+    choices: [
+      "It stops counting those entries, since they're excluded from Cloud Logging entirely",
+      "It keeps counting every matching entry — metrics are evaluated on the full ingested stream, independent of sink exclusion filters",
+      "It throws an error because the metric's source logs no longer exist",
+      "It silently pauses until the exclusion filter is removed"
+    ],
+    answer: 1,
+    explanation: "<strong>Correct.</strong> Log-based metrics evaluate against the full ingested log stream before/independent of the <code>_Default</code> sink's inclusion/exclusion filters. This is exactly why they're useful: you can stop paying to store a noisy log while still measuring its rate."
+  },
+  {
+    topic: "Log-based metrics & alerting",
+    q: "You have a log-based counter metric for <code>severity>=ERROR AND resource.type=\"cloud_run_revision\"</code>. What is the correct next step to page someone when the error rate spikes?",
+    choices: [
+      "Add a second log sink pointed at Pub/Sub",
+      "Create a Cloud Monitoring alerting policy with a condition on the metric, and attach a notification channel",
+      "Increase the log bucket's retention period",
+      "Add more label extractors to the metric"
+    ],
+    answer: 1,
+    explanation: "<strong>Correct.</strong> Once a log-based metric exists, it's a normal Cloud Monitoring metric (<code>logging.googleapis.com/user/&lt;name&gt;</code>). Alerting is configured in Monitoring: an alerting policy defines the condition (threshold, rate-of-change, absence) and notification channels (email, Slack, PagerDuty, Pub/Sub, etc.) deliver the page."
   }
 ];
 

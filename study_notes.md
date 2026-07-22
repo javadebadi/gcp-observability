@@ -282,3 +282,48 @@ F("textPayload").has("timeout")  # → textPayload:"timeout"
 ```
 
 `.has()` exists because Python has no `:` operator to overload — it mirrors the Cloud Logging `:` semantics directly.
+
+---
+
+## Log-based metrics & alerting
+
+These are the bridge between Cloud **Logging** and Cloud **Monitoring** — they turn a stream of log entries into a time-series metric you can graph, threshold, and alert on.
+
+### Two metric types
+
+| Type | What it tracks | Example |
+|---|---|---|
+| **Counter** | Number of log entries matching a filter, per time interval | Count of `severity>=ERROR` entries per minute |
+| **Distribution** | A numeric value pulled out of each matching entry, bucketed into a histogram | Request latency from `jsonPayload.latency_ms` |
+
+### System vs user-defined
+
+- **System-defined metrics** — GCP ships these for free, e.g. `logging.googleapis.com/byte_count`. You don't create them.
+- **User-defined metrics** — you define a filter (same filter language as `QueryBuilder`), and optionally:
+  - **Label extractors**: regex on a field (e.g. `resource.labels.service_name`) pulled into a metric label — up to 10 labels per metric, so you can slice the metric by dimension in Monitoring.
+  - **Value extractor** (distribution only): which numeric field to bucket, plus a unit.
+
+### Metrics see logs sinks don't
+
+Log-based metrics are evaluated against the **full ingested log stream**, independent of the `_Default` sink's inclusion/exclusion filters. You can write an exclusion filter to stop *storing* a noisy log (saving storage cost) while a log-based metric still *counts* every occurrence. This is the standard pattern for high-volume logs you want to measure but not keep.
+
+The flip side: metrics are **not retroactive** — a metric only counts entries ingested after it was created; it cannot be backfilled from log history.
+
+### Alerting on top
+
+A log-based metric becomes a normal Cloud Monitoring metric (`logging.googleapis.com/user/<metric-name>`). From there it's identical to any other Monitoring metric:
+
+1. Create an **alerting policy** with a condition on the metric (threshold, rate-of-change, absence).
+2. Attach **notification channels** (email, Slack, PagerDuty, Pub/Sub, etc.).
+3. Cloud Monitoring evaluates the condition continuously and fires when breached.
+
+This is why you'd reach for a counter metric like `severity>=ERROR AND resource.type="cloud_run_revision"` — not to browse logs, but to page someone when the error rate spikes.
+
+### Sinks vs log-based metrics
+
+| | Log sink | Log-based metric |
+|---|---|---|
+| Purpose | Export/store raw log entries | Aggregate into a number/histogram |
+| Destination | BigQuery, Pub/Sub, Cloud Storage, another bucket | Cloud Monitoring time series |
+| Use case | Analysis, long-term retention, compliance | Dashboards, alerting, SLOs |
+| Retroactive | N/A (routes future logs) | No — counts from creation forward |
